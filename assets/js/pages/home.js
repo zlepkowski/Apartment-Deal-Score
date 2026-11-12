@@ -9,7 +9,8 @@ import { el, mount } from '../util/dom.js';
 import { money, num, ppsf } from '../util/format.js';
 import { median } from '../util/stats.js';
 import { getListings } from '../data/adapter.js';
-import { scoreAll } from '../core/score.js';
+import { scoreAll, monthLabel } from '../core/score.js';
+import { MARKET } from '../data/market.js';
 import { filterBar } from '../components/filters.js';
 import { listingCard } from '../components/listingCard.js';
 import { listingsMap, hasLocation } from '../components/map.js';
@@ -68,7 +69,8 @@ function sortListings(list, sort) {
     deal: (a, b) => b.dealScore - a.dealScore,
     price_asc: (a, b) => a.rent - b.rent,
     price_desc: (a, b) => b.rent - a.rent,
-    ppsf_asc: (a, b) => ppsf(a.rent, a.sqft) - ppsf(b.rent, b.sqft),
+    // Listings without square footage sort last.
+    ppsf_asc: (a, b) => (ppsf(a.rent, a.sqft) ?? Infinity) - (ppsf(b.rent, b.sqft) ?? Infinity),
     savings: (a, b) => (b.monthlySavings ?? -1e9) - (a.monthlySavings ?? -1e9),
   };
   return [...list].sort(by[sort] || by.deal);
@@ -158,15 +160,25 @@ export async function homePage(root, ctx) {
 
     mount(gridSlot, filtered.length
       ? el('div', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' }, filtered.map(listingCard))
-      : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
-        'No listings match these filters. Try widening your search.'));
+      : all.length
+        ? el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
+          'No listings match these filters. Try widening your search.')
+        : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center' }, [
+          el('p', { class: 'font-semibold text-slate-700' }, 'No listings yet'),
+          el('p', { class: 'mt-1 text-sm text-slate-500' },
+            'Add an apartment you\'re considering to see its Deal Score against StreetEasy\'s market data.'),
+          el('a', { href: '#/add', class: 'mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700' }, 'Add a listing'),
+        ]));
   }
 
   mount(root, el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
     el('div', { class: 'mb-5' }, [
       el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
       el('p', { class: 'text-sm text-slate-500' },
-        'Every listing is scored against comparable units nearby — sorted best deal first.'),
+        'Every listing is scored against StreetEasy\'s median asking rent for its neighborhood and size — sorted best deal first.'),
+      el('p', { class: 'mt-1 text-xs text-slate-400' }, MARKET.asOf
+        ? [`Market data: `, el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-600' }, 'StreetEasy'), `, ${monthLabel(MARKET.asOf)}.`]
+        : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
     ]),
     filtersSlot,
     summarySlot,

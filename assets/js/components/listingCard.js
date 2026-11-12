@@ -20,17 +20,18 @@ export function listingCard(scored) {
   const photos = photoUrls(scored);
   const cover = photos[0];
 
-  // Savings backed by few comparable listings are shown muted and flagged.
+  // Savings measured against a borough- or city-wide median (no neighborhood
+  // figure) are shown muted and flagged.
   const savings = scored.monthlySavings;
   const rough = scored.priceConfidence === 'low';
   const note = rough ? ' · rough estimate' : '';
   const savingsLine = savings == null
-    ? el('div', { class: 'text-xs text-slate-400' }, 'Not enough comps to price yet')
+    ? el('div', { class: 'text-xs text-slate-400' }, 'No StreetEasy benchmark yet')
     : savings > 30
-      ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-emerald-600'}` }, `~${money(Math.abs(savings))}/mo below typical${note}`)
+      ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-emerald-600'}` }, `~${money(Math.abs(savings))}/mo below StreetEasy median${note}`)
       : savings < -30
-        ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-rose-500'}` }, `~${money(Math.abs(savings))}/mo above typical${note}`)
-        : el('div', { class: 'text-xs text-slate-400' }, `Around typical price${note}`);
+        ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-rose-500'}` }, `~${money(Math.abs(savings))}/mo above StreetEasy median${note}`)
+        : el('div', { class: 'text-xs text-slate-400' }, `Around the StreetEasy median${note}`);
 
   return el('a', {
     href: `#/listing/${scored.id}`,
@@ -58,7 +59,7 @@ export function listingCard(scored) {
     el('div', { class: 'p-4' }, [
       el('div', { class: 'flex items-baseline justify-between gap-2' }, [
         el('div', { class: 'text-lg font-bold text-slate-900' }, money(scored.rent)),
-        el('div', { class: 'text-xs text-slate-500' }, `${beds(scored.beds)} · ${scored.baths} ba · ${scored.sqft} sqft`),
+        el('div', { class: 'text-xs text-slate-500' }, `${beds(scored.beds)} · ${scored.baths} ba${scored.sqft > 0 ? ` · ${scored.sqft} sqft` : ''}`),
       ]),
       savingsLine,
       el('div', { class: 'mt-1 truncate text-sm font-medium text-slate-700' }, scored.title),
@@ -70,7 +71,7 @@ export function listingCard(scored) {
           ? el('span', { class: 'rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500' }, `+${scored.amenities.length - 4}`)
           : null,
       ]),
-      el('div', { class: 'mt-2 text-xs text-slate-400' }, ppsfText(scored.rent, scored.sqft)),
+      scored.sqft > 0 ? el('div', { class: 'mt-2 text-xs text-slate-400' }, ppsfText(scored.rent, scored.sqft)) : null,
     ]),
   ]);
 }

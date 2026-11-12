@@ -7,6 +7,7 @@ import { el, mount } from '../util/dom.js';
 import { AMENITIES } from '../data/amenities.js';
 import { addUserListing, loadUserListings, removeUserListing, clearUserListings } from '../util/storage.js';
 import { invalidate } from '../data/adapter.js';
+import { MARKET } from '../data/market.js';
 import { money, httpUrl } from '../util/format.js';
 
 function slug(s) {
@@ -29,6 +30,25 @@ function input(name, attrs = {}) {
   });
 }
 
+// Suggest StreetEasy's own area names so listings match its benchmarks.
+function marketDatalists() {
+  const nbhds = MARKET.areas.filter((a) => a.type === 'neighborhood')
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const boroughs = MARKET.areas.filter((a) => a.type === 'borough');
+  return el('div', {}, [
+    el('datalist', { id: 'se-neighborhoods' }, nbhds.map((a) => el('option', { value: a.name }, a.borough || ''))),
+    el('datalist', { id: 'se-boroughs' }, boroughs.map((a) => el('option', { value: a.name }))),
+  ]);
+}
+
+// Picking a StreetEasy neighborhood fills in its borough if that's still empty.
+function fillBorough(nbhdInput) {
+  const city = nbhdInput.form && nbhdInput.form.elements.city;
+  if (!city || city.value) return;
+  const matches = MARKET.areas.filter((a) => a.type === 'neighborhood' && a.name.toLowerCase() === nbhdInput.value.trim().toLowerCase());
+  if (matches.length === 1 && matches[0].borough) city.value = matches[0].borough;
+}
+
 export function addPage(root) {
   function render(message) {
     const form = el('form', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
@@ -36,10 +56,13 @@ export function addPage(root) {
       field('Street address', input('address', { placeholder: '30-14 31st St' })),
       field('Latitude (optional, for the map)', input('lat', { type: 'number', step: 'any', min: '-90', max: '90', placeholder: '40.7679' })),
       field('Longitude (optional, for the map)', input('lng', { type: 'number', step: 'any', min: '-180', max: '180', placeholder: '-73.9205' })),
-      field('Borough / city', input('city', { required: 'required', placeholder: 'Queens' })),
-      field('Neighborhood', input('neighborhood', { required: 'required', placeholder: 'Astoria' })),
+      field('Borough', input('city', { required: 'required', placeholder: 'Queens', list: 'se-boroughs', autocomplete: 'off' })),
+      field('Neighborhood (StreetEasy name)', input('neighborhood', {
+        required: 'required', placeholder: 'Astoria', list: 'se-neighborhoods', autocomplete: 'off',
+        onChange: (e) => fillBorough(e.target),
+      })),
       field('Monthly rent ($)', input('rent', { type: 'number', required: 'required', min: '0', step: '25' })),
-      field('Square feet', input('sqft', { type: 'number', required: 'required', min: '0', step: '10' })),
+      field('Square feet (optional, earns the space bonus)', input('sqft', { type: 'number', min: '0', step: '10' })),
       field('Bedrooms (0 = studio)', input('beds', { type: 'number', required: 'required', min: '0', max: '6', value: '1' })),
       field('Bathrooms', input('baths', { type: 'number', required: 'required', min: '1', max: '6', step: '0.5', value: '1' })),
       field('Year built', input('yearBuilt', { type: 'number', min: '1850', max: '2030', placeholder: '2018' })),
@@ -93,7 +116,7 @@ export function addPage(root) {
         id: `user-${slug(city)}-${slug(nbhd)}-${Date.now().toString(36)}`,
         title: fd.get('title'), address: fd.get('address') || '',
         city, citySlug: slug(city), neighborhood: nbhd, neighborhoodSlug: slug(nbhd),
-        rent: Number(fd.get('rent')), sqft: Number(fd.get('sqft')),
+        rent: Number(fd.get('rent')), sqft: Number(fd.get('sqft')) || null,
         beds: Number(fd.get('beds')), baths: Number(fd.get('baths')),
         yearBuilt: Number(fd.get('yearBuilt')) || new Date().getFullYear(),
         renovated: fd.get('renovated') === 'on',
@@ -148,12 +171,12 @@ export function addPage(root) {
     const page = el('div', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
       el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, 'Add a listing'),
       el('p', { class: 'mt-2 text-sm text-slate-600' },
-        'Enter a real listing to see its Deal Score against everything else in its market. ' +
+        'Enter an apartment you\'re considering to see its Deal Score against StreetEasy\'s median asking rent for its neighborhood and size. ' +
         'Listings are stored locally; export them as JSON to commit into the data file or load into a live backend.'),
       message ? el('div', { class: 'mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700' }, [
         message, ' ', el('a', { href: '#/', class: 'underline' }, 'Go to Browse →'),
       ]) : null,
-      el('div', { class: 'mt-5 rounded-2xl border border-slate-200 bg-white p-5' }, [form]),
+      el('div', { class: 'mt-5 rounded-2xl border border-slate-200 bg-white p-5' }, [form, marketDatalists()]),
       el('div', { class: 'mt-6' }, [draftPanel]),
     ]);
     mount(root, page);

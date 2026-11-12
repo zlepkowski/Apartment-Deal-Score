@@ -4,7 +4,8 @@
 import { el, mount } from '../util/dom.js';
 import { money, bedsLong, ppsfText, titleize, httpUrl, photoUrls } from '../util/format.js';
 import { getListings } from '../data/adapter.js';
-import { scoreAll, bedLabel } from '../core/score.js';
+import { scoreAll, bedLabel, bedClass } from '../core/score.js';
+import { MARKET } from '../data/market.js';
 import { scoreBadge, toneOf } from '../components/scoreBadge.js';
 import { listingsMap, hasLocation } from '../components/map.js';
 import { photoGallery } from '../components/gallery.js';
@@ -29,8 +30,11 @@ function bar(points, max) {
 function breakdownRow(b) {
   return el('div', { class: 'py-3' }, [
     el('div', { class: 'flex items-baseline justify-between' }, [
-      el('div', { class: 'text-sm font-semibold text-slate-800' }, b.label),
-      el('div', { class: 'text-sm tabular-nums text-slate-500' }, `${b.points.toFixed(1)} / ${b.max}`),
+      el('div', { class: 'text-sm font-semibold text-slate-800' }, [
+        b.label,
+        b.bonus ? el('span', { class: 'ml-1.5 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700' }, 'Bonus') : null,
+      ]),
+      el('div', { class: 'text-sm tabular-nums text-slate-500' }, b.bonus ? `+${b.points.toFixed(1)} / ${b.max}` : `${b.points.toFixed(1)} / ${b.max}`),
     ]),
     el('div', { class: 'mt-1.5' }, [bar(b.points, b.max)]),
     el('div', { class: 'mt-1 text-xs text-slate-500' }, b.detail),
@@ -43,38 +47,40 @@ const CONFIDENCE = {
   low: { label: 'Low confidence', cls: 'bg-slate-100 text-slate-600' },
 };
 
-const perSqft = (v) => `$${v.toFixed(2)}/sqft`;
+const LEVEL_NOUN = { neighborhood: 'neighborhood', submarket: 'area', borough: 'borough', city: 'citywide' };
 
-// Plain-language walk-through of how the "typical rent" anchor was built, so a
-// thin-market estimate is visibly an estimate.
-function anchorExplainer(s) {
-  const a = s.priceAnchor;
-  if (!a) {
-    return el('p', { class: 'mt-2 text-xs text-slate-500' },
-      `No other ${s.city} listings to compare against yet. Add more listings in this area to price it.`);
+// Where the "typical rent" figure comes from: StreetEasy's median asking rent,
+// and which area it had to fall back to when the neighborhood has no figure.
+function benchmarkExplainer(s) {
+  const b = s.benchmark;
+  const bed = bedLabel(bedClass(s.beds));
+  const credit = el('p', { class: 'mt-2 text-xs text-slate-400' }, [
+    'Source: ',
+    el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-600' }, 'StreetEasy Data Dashboard'),
+    s.benchmarkMonth ? `, ${s.benchmarkMonth}` : '',
+    '.',
+  ]);
+  if (!b) {
+    return el('div', {}, [
+      el('p', { class: 'mt-2 text-xs text-slate-500' }, MARKET.areas.length
+        ? `StreetEasy doesn't publish a ${bed} median for ${s.neighborhood} or ${s.city}, so this listing's price can't be benchmarked yet.`
+        : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
+      credit,
+    ]);
   }
-  const bed = bedLabel(s.beds);
-  const levelPct = Math.round((a.location.factor - 1) * 100);
-  const level = Math.abs(levelPct) < 3
-    ? `about at the ${s.city} average`
-    : `${Math.abs(levelPct)}% ${levelPct > 0 ? 'above' : 'below'} the ${s.city} average`;
-  const step = (text) => el('li', { class: 'text-xs text-slate-600' }, text);
-  const conf = CONFIDENCE[a.confidence];
-
+  const conf = CONFIDENCE[b.confidence];
+  const fellBack = b.level !== 'neighborhood';
   return el('div', { class: 'mt-3' }, [
     el('span', { class: `inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${conf.cls}` }, conf.label),
-    el('ul', { class: 'mt-2 list-disc space-y-1 pl-4' }, [
-      a.local.count
-        ? step(`${a.local.count} other ${s.neighborhood} ${bed} listing${a.local.count === 1 ? '' : 's'}: median ${perSqft(a.local.ppsf)}.`)
-        : step(`No other ${s.neighborhood} ${bed} listings yet.`),
-      step(`${a.market.basis}: median ${perSqft(a.market.ppsf)} across ${a.market.count} listings.`),
-      a.location.count
-        ? step(`${s.neighborhood} runs ${level}, so the ${s.city}-wide figure adjusts to ${perSqft(a.adjustedMarketPpsf)}.`)
+    el('ul', { class: 'mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600' }, [
+      el('li', {}, `StreetEasy median asking rent for ${bed}s in ${b.area.name}.`),
+      fellBack
+        ? el('li', {}, b.matchedNeighborhood
+          ? `StreetEasy doesn't publish a ${bed} figure for ${b.matchedNeighborhood}, so this uses the ${LEVEL_NOUN[b.level]} figure.`
+          : `"${s.neighborhood}" isn't a StreetEasy neighborhood name (or has no ${bed} figure), so this uses the ${LEVEL_NOUN[b.level]} figure.`)
         : null,
-      step(a.local.count
-        ? `Weighted ${Math.round(a.weight * 100)}% neighborhood / ${Math.round((1 - a.weight) * 100)}% adjusted ${s.city} → ${perSqft(a.ppsf)} × ${s.sqft} sqft.`
-        : `Typical: ${perSqft(a.ppsf)} × ${s.sqft} sqft.`),
     ]),
+    credit,
   ]);
 }
 
@@ -111,10 +117,10 @@ export async function listingPage(root, ctx) {
           : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
     },
     s.monthlySavings > 30
-      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedLabel(s.beds)} in this area (~${money(s.monthlySavings * 12)}/yr).`
+      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below StreetEasy's median for ${s.benchmark.area.name} ${bedLabel(bedClass(s.beds))}s (~${money(s.monthlySavings * 12)}/yr).`
       : s.monthlySavings < -30
-        ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above the typical comparable unit.`
-        : 'Priced right around the typical comparable unit.')
+        ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above StreetEasy's median for ${s.benchmark.area.name} ${bedLabel(bedClass(s.beds))}s.`
+        : `Priced right around StreetEasy's median for ${s.benchmark.area.name} ${bedLabel(bedClass(s.beds))}s.`)
     : null;
 
   const amenityGrid = el('div', { class: 'grid grid-cols-2 gap-2 sm:grid-cols-3' },
@@ -144,13 +150,13 @@ export async function listingPage(root, ctx) {
           ]),
           el('div', { class: 'text-right' }, [
             el('div', { class: 'text-2xl font-extrabold text-slate-900' }, `${money(s.rent)}/mo`),
-            el('div', { class: 'text-xs text-slate-400' }, ppsfText(s.rent, s.sqft)),
+            s.sqft > 0 ? el('div', { class: 'text-xs text-slate-400' }, ppsfText(s.rent, s.sqft)) : null,
           ]),
         ]),
         el('div', { class: 'mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4' }, [
           fact('Type', bedsLong(s.beds)),
           fact('Bathrooms', String(s.baths)),
-          fact('Size', `${s.sqft} sqft`),
+          fact('Size', s.sqft > 0 ? `${s.sqft} sqft` : 'Not listed'),
           fact('Available', s.available),
         ]),
         savingsBanner ? el('div', { class: 'mt-4' }, [savingsBanner]) : null,
@@ -175,16 +181,14 @@ export async function listingPage(root, ctx) {
             el('h2', { class: 'text-sm font-bold uppercase tracking-wide text-slate-500' }, 'Deal Score'),
           ]),
           el('div', { class: 'mt-3' }, [scoreBadge(s, 'lg')]),
-          el('p', { class: 'mt-3 text-xs text-slate-500' },
-            `Amenities and space compared with ${s.compCount} other listings · ${s.compBasis}.`),
           el('div', { class: 'mt-4 divide-y divide-slate-100' }, s.breakdown.map(breakdownRow)),
           el('a', { href: '#/methodology', class: 'mt-4 inline-block text-xs text-emerald-600 underline' },
             'How is this calculated?'),
         ]),
         el('div', { class: 'mt-4 rounded-2xl border border-slate-200 bg-white p-5' }, [
-          el('div', { class: 'text-xs text-slate-400' }, 'Typical rent for a comparable unit'),
+          el('div', { class: 'text-xs text-slate-400' }, 'Typical rent (StreetEasy median)'),
           el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
-          anchorExplainer(s),
+          benchmarkExplainer(s),
           externalUrl
             ? el('a', { href: externalUrl, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
             : null,

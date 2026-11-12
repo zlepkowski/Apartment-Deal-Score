@@ -20,6 +20,7 @@ const order = [
   'assets/js/util/storage.js',
   'assets/js/data/amenities.js',
   'assets/js/data/listings.js',
+  'assets/js/data/market.js',
   'assets/js/data/adapter.js',
   'assets/js/core/score.js',
   'assets/js/components/scoreBadge.js',
