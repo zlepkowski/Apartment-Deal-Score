@@ -6,8 +6,8 @@ import { TYPICAL_SQFT, monthLabel } from '../core/score.js';
 
 const COMPONENTS = [
   ['Price vs. StreetEasy median', '60 pts', 'The listing\'s rent compared with StreetEasy\'s median asking rent for the same neighborhood and bedroom count (studio, 1, 2, or 3+ beds). Right at the median earns half marks; 25% below earns full marks; 25% above earns none. This is the single biggest factor.'],
-  ['Amenity richness', '22 pts', 'Each amenity carries a weight reflecting how much renters typically pay for it (laundry, parking, central A/C and outdoor space move rent the most). A well-equipped doorman building earns full marks.'],
-  ['In-unit laundry', '10 pts', 'Called out on its own because it\'s one of the most-requested features. In-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
+  ['Amenity richness', '22 pts', 'Each amenity has a hand-set weight; in-unit laundry, parking, central A/C, dishwashers and outdoor space weigh the most. The weights are a judgment call, not fitted to rent data. An apartment with most of them, such as a doorman building with in-unit laundry, earns full marks.'],
+  ['In-unit laundry', '10 pts', 'Scored on its own, on top of the amenity score, so laundry counts extra. An in-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
   ['Condition & extras', '8 pts', 'Recent renovation or newer construction, included utilities, and move-in concessions each add points.'],
   ['Space bonus', 'up to +10', 'Only when the listing gives its square footage. A unit 30% or more bigger than a typical NYC apartment of its size earns the full bonus. Smaller units, and listings without square footage, simply get no bonus. The total is capped at 100.'],
 ];
@@ -16,7 +16,7 @@ function row([label, pts, desc]) {
   return el('div', { class: 'border-t border-slate-100 py-4' }, [
     el('div', { class: 'flex items-baseline justify-between gap-3' }, [
       el('div', { class: 'font-semibold text-slate-800' }, label),
-      el('div', { class: 'whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-bold text-emerald-700' }, pts),
+      el('div', { class: 'num whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-bold text-accent' }, pts),
     ]),
     el('p', { class: 'mt-1 text-sm text-slate-600' }, desc),
   ]);
@@ -30,7 +30,7 @@ function gradeChip(label, range, cls) {
 
 const methodCard = (children) => el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, children);
 const methodPara = (text) => el('p', { class: 'mt-1 text-sm text-slate-600' }, text);
-const methodLink = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-emerald-700 underline' }, text);
+const methodLink = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-accent underline' }, text);
 
 export function methodologyPage(root) {
   const page = el('div', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
@@ -77,7 +77,7 @@ export function methodologyPage(root) {
         `2-bed ~${TYPICAL_SQFT[2]}, 3+ bed ~${TYPICAL_SQFT[3]}.`),
     ]),
 
-    el('p', { class: 'mt-6 text-xs text-slate-400' },
+    el('p', { class: 'mt-6 text-xs text-slate-600' },
       'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js. DealScore is not affiliated with StreetEasy.'),
   ]);
   mount(root, page);

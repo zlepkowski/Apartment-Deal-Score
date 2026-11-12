@@ -7,10 +7,10 @@ import { el } from '../util/dom.js';
 import { titleize } from '../util/format.js';
 
 function select(label, value, options, onChange) {
-  return el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
+  return el('label', { class: 'ds-label flex flex-col gap-1' }, [
     label,
     el('select', {
-      class: 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
+      class: 'ds-field',
       onChange: (e) => onChange(e.target.value),
     }, options.map((o) =>
       el('option', { value: o.value, ...(String(o.value) === String(value) ? { selected: 'selected' } : {}) }, o.label))),
@@ -44,19 +44,20 @@ export function filterBar(state, derived, onChange) {
       select('Borough', state.city, cityOpts, (v) => set({ city: v, neighborhood: '' })),
       select('Neighborhood', state.neighborhood, nbhdOpts, (v) => set({ neighborhood: v })),
       select('Bedrooms', state.beds, bedOpts, (v) => set({ beds: v })),
-      el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
+      el('label', { class: 'ds-label flex flex-col gap-1' }, [
         'Max rent',
+        // Text input so "$3,000" or "3000/mo" works; only the digits are kept.
         el('input', {
-          type: 'number', value: state.maxRent || '', placeholder: 'Any', min: '0', step: '50',
-          class: 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
-          onInput: (e) => set({ maxRent: e.target.value }),
+          type: 'text', inputmode: 'numeric', autocomplete: 'off', value: state.maxRent || '', placeholder: 'Any',
+          class: 'ds-field num',
+          onInput: (e) => set({ maxRent: String(e.target.value).replace(/\.\d*$/, '').replace(/\D/g, '') }),
         }),
       ]),
-      el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
-        'Must have',
-        el('label', { class: 'flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700' }, [
+      el('div', { class: 'flex flex-col gap-1' }, [
+        el('span', { class: 'ds-label', id: 'filter-must-have' }, 'Must have'),
+        el('label', { class: 'flex min-h-[2.5rem] items-center gap-2 rounded-lg border border-[color:var(--border-control)] bg-white px-3 py-2 text-sm text-slate-800' }, [
           el('input', {
-            type: 'checkbox', ...(state.laundry ? { checked: 'checked' } : {}),
+            type: 'checkbox', 'aria-describedby': 'filter-must-have', ...(state.laundry ? { checked: 'checked' } : {}),
             onChange: (e) => set({ laundry: e.target.checked }),
           }),
           'In-unit laundry',

@@ -64,6 +64,9 @@ To tune it:
   amenities, a location map with nearby listings, the per-component score
   breakdown, and which StreetEasy figure the price was compared with.
 - **How scoring works:** the methodology, in plain language.
+- **Privacy** and **Terms:** drafts written from what the site actually does,
+  with `[[TODO]]` placeholders for owner details. They need review by a lawyer
+  before you rely on them.
 - **Add listing:** a form to enter real listings, with StreetEasy neighborhood
   suggestions, optional square footage, coordinates and photo URLs. They're saved in your browser and show up in
   Browse right away, tagged "Draft". **Export JSON** copies them out.
@@ -114,7 +117,6 @@ you add. The shape is documented at the top of
   utilitiesIncluded: ['heat', 'hot water'], concession: '',
   amenities: ['dishwasher', 'in_building_laundry'],   // keys from data/amenities.js
   images: [],                                         // optional photo URLs; first is the cover
-  accent: 'teal',                                     // placeholder color when there's no photo
   url: '',                                            // optional external listing URL
 }
 ```
@@ -155,8 +157,9 @@ DealScore is meant to run on StreetEasy data only, in three phases:
 
 ## Map
 
-The map uses [Leaflet](https://leafletjs.com/) 1.9.4, loaded from unpkg with a
-pinned integrity hash, and OpenStreetMap's standard tiles. No API key is needed.
+The map uses [Leaflet](https://leafletjs.com/) 1.9.4, self-hosted in
+`assets/vendor/leaflet/` (byte-identical to the release), and OpenStreetMap's
+standard tiles. No API key is needed.
 OSM's tiles are fine for light traffic. For a busy site, switch `TILE_URL` in
 [`assets/js/components/map.js`](assets/js/components/map.js) to a hosted tile
 provider, per the
@@ -171,23 +174,39 @@ Build and deployment → Source: GitHub Actions**.
 ## Project layout
 
 ```
-index.html                  shell: Tailwind (CDN), Leaflet (CDN), dist/dealscore.js
+index.html                  shell: Tailwind (CDN) + token config, skip link, dist/dealscore.js
+CLAUDE.md                   notes for Claude sessions (points at the design guidelines)
+CREDITS.md                  every third-party asset, library and data source, with licenses
+docs/DESIGN_GUIDELINES.md   design, UX, motion and compliance rules
+docs/DESIGN_AUDIT.md        latest audit against those rules, and what needs owner input
 build.mjs                   ~50-line bundler -> dist/dealscore.js
 dist/dealscore.js           generated bundle (committed)
 tests/score.test.mjs        engine tests (node --test)
 scripts/import-streeteasy.mjs  StreetEasy CSVs -> assets/js/data/market.js
 data/streeteasy/            drop StreetEasy downloads here (git-ignored)
 assets/
-  css/styles.css            fonts, background, map pins, gallery
+  css/styles.css            design tokens (colour, radius, shadow, motion), base and
+                            component styles, reduced-motion rules
+  fonts/                    Inter, self-hosted (OFL)
+  vendor/leaflet/           Leaflet 1.9.4 (BSD-2-Clause)
   js/
     main.js                 router bootstrap
     util/                   format (incl. URL guards), stats, dom, router, storage
     data/                   amenities (catalog + weights), market (StreetEasy medians),
                             listings (bundled, empty), adapter
     core/score.js           the Deal Score engine
-    components/             header, scoreBadge, listingCard, filters, map, gallery
-    pages/                  home, listing, methodology, add
+    components/             header, icons (Lucide), scoreBadge, listingCard, filters, map, gallery
+    pages/                  home, listing, methodology, add, legal (privacy + terms)
 ```
+
+## Design rules
+
+UI, copy and data-handling changes follow
+[`docs/DESIGN_GUIDELINES.md`](docs/DESIGN_GUIDELINES.md); the latest audit is
+[`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md). In short: WCAG 2.2 AA contrast
+and keyboard access, one accent colour (`--accent` in `assets/css/styles.css`,
+available to Tailwind as `bg-accent` / `text-accent`), no emoji as icons, no
+unsupported claims, and `prefers-reduced-motion` respected.
 
 ## Known limitations / next steps
 

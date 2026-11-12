@@ -23,6 +23,7 @@ const order = [
   'assets/js/data/market.js',
   'assets/js/data/adapter.js',
   'assets/js/core/score.js',
+  'assets/js/components/icons.js',
   'assets/js/components/scoreBadge.js',
   'assets/js/components/map.js',
   'assets/js/components/gallery.js',
@@ -33,6 +34,7 @@ const order = [
   'assets/js/pages/listing.js',
   'assets/js/pages/methodology.js',
   'assets/js/pages/add.js',
+  'assets/js/pages/legal.js',
   'assets/js/main.js',
 ];
 

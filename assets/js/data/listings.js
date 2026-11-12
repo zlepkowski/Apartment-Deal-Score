@@ -21,12 +21,11 @@
 //   yearBuilt     integer
 //   renovated     boolean — recent renovation
 //   available     ISO date string
-//   petPolicy     'friendly' | 'cats' | 'none'
+//   petPolicy     'friendly' | 'cats' | 'none' | '' (not listed)
 //   utilitiesIncluded  array of strings (e.g. ['heat','hot water'])
 //   concession    free-text incentive (e.g. '1 month free') or ''
 //   amenities     array of amenity keys (see data/amenities.js)
 //   images        optional array of photo URLs (first one is the cover)
-//   accent        tailwind-ish hue used for the placeholder when there's no photo
 //   url           optional external listing URL
 
 export const SEED_LISTINGS = [];

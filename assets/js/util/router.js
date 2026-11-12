@@ -53,6 +53,11 @@ function dispatch() {
   if (notFound) notFound();
 }
 
+// Re-run the current route (e.g. "Try again" after an error).
+export function refresh() {
+  dispatch();
+}
+
 export function navigate(hash) {
   if (location.hash === hash) dispatch();
   else location.hash = hash;

@@ -199,6 +199,11 @@ function dispatch() {
   if (notFound) notFound();
 }
 
+// Re-run the current route (e.g. "Try again" after an error).
+function refresh() {
+  dispatch();
+}
+
 function navigate(hash) {
   if (location.hash === hash) dispatch();
   else location.hash = hash;
@@ -213,11 +218,11 @@ function startRouter() {
 // LocalStorage-backed store for listings the user adds in the browser before
 // they're committed to the seed file or wired to a live backend.
 
-const KEY = 'dealscore.userListings.v1';
+const USER_LISTINGS_KEY = 'dealscore.userListings.v1';
 
 function loadUserListings() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(USER_LISTINGS_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -227,7 +232,7 @@ function loadUserListings() {
 }
 
 function saveUserListings(list) {
-  localStorage.setItem(KEY, JSON.stringify(list));
+  localStorage.setItem(USER_LISTINGS_KEY, JSON.stringify(list));
 }
 
 function addUserListing(listing) {
@@ -244,47 +249,48 @@ function removeUserListing(id) {
 }
 
 function clearUserListings() {
-  localStorage.removeItem(KEY);
+  localStorage.removeItem(USER_LISTINGS_KEY);
 }
 
 /* ===== assets/js/data/amenities.js ===== */
-// Amenity catalog. Each amenity carries a `weight` reflecting how much renters
-// value it (loosely calibrated to rent-premium research — laundry, parking,
-// outdoor space, and central air tend to move rent the most). The scoring
-// engine sums these weights to produce an amenity richness score.
+// Amenity catalog. Each amenity carries a hand-set `weight`: how much it adds
+// to the amenity score. In-unit laundry, parking, central A/C, dishwashers and
+// outdoor space weigh the most. The weights are a judgment call, not fitted to
+// rent data; tune them here.
 //
-// `key` is what listings store in their `amenities` array.
+// `key` is what listings store in their `amenities` array; `group` organizes
+// the add-listing form.
 
 const AMENITIES = [
   // High-impact (renters pay a real premium)
-  { key: 'in_unit_laundry', label: 'In-unit washer/dryer', icon: '🌀', weight: 10, group: 'Laundry' },
-  { key: 'parking', label: 'Dedicated parking', icon: '🅿️', weight: 8, group: 'Building' },
-  { key: 'central_ac', label: 'Central A/C', icon: '❄️', weight: 7, group: 'Comfort' },
-  { key: 'dishwasher', label: 'Dishwasher', icon: '🍽️', weight: 6, group: 'Kitchen' },
-  { key: 'outdoor_space', label: 'Balcony / patio', icon: '🌿', weight: 6, group: 'Comfort' },
-  { key: 'pet_friendly', label: 'Pet friendly', icon: '🐾', weight: 6, group: 'Policy' },
+  { key: 'in_unit_laundry', label: 'In-unit washer/dryer', weight: 10, group: 'Laundry' },
+  { key: 'parking', label: 'Dedicated parking', weight: 8, group: 'Building' },
+  { key: 'central_ac', label: 'Central A/C', weight: 7, group: 'Comfort' },
+  { key: 'dishwasher', label: 'Dishwasher', weight: 6, group: 'Kitchen' },
+  { key: 'outdoor_space', label: 'Balcony / patio', weight: 6, group: 'Comfort' },
+  { key: 'pet_friendly', label: 'Pet friendly', weight: 6, group: 'Policy' },
 
   // Mid-impact
-  { key: 'gym', label: 'Fitness center', icon: '🏋️', weight: 5, group: 'Building' },
-  { key: 'stainless_appliances', label: 'Stainless appliances', icon: '✨', weight: 4, group: 'Kitchen' },
-  { key: 'hardwood', label: 'Hardwood floors', icon: '🪵', weight: 4, group: 'Interior' },
-  { key: 'elevator', label: 'Elevator', icon: '🛗', weight: 4, group: 'Building' },
-  { key: 'pool', label: 'Pool', icon: '🏊', weight: 4, group: 'Building' },
-  { key: 'in_building_laundry', label: 'In-building laundry', icon: '🧺', weight: 3, group: 'Laundry' },
+  { key: 'gym', label: 'Fitness center', weight: 5, group: 'Building' },
+  { key: 'stainless_appliances', label: 'Stainless appliances', weight: 4, group: 'Kitchen' },
+  { key: 'hardwood', label: 'Hardwood floors', weight: 4, group: 'Interior' },
+  { key: 'elevator', label: 'Elevator', weight: 4, group: 'Building' },
+  { key: 'pool', label: 'Pool', weight: 4, group: 'Building' },
+  { key: 'in_building_laundry', label: 'In-building laundry', weight: 3, group: 'Laundry' },
 
   // Nice-to-have
-  { key: 'doorman', label: 'Doorman / concierge', icon: '🛎️', weight: 3, group: 'Building' },
-  { key: 'rooftop', label: 'Rooftop / common deck', icon: '🏙️', weight: 3, group: 'Building' },
-  { key: 'walk_in_closet', label: 'Walk-in closet', icon: '🚪', weight: 2, group: 'Interior' },
-  { key: 'high_ceilings', label: 'High ceilings', icon: '📐', weight: 2, group: 'Interior' },
-  { key: 'storage', label: 'Storage unit', icon: '📦', weight: 2, group: 'Building' },
-  { key: 'ev_charging', label: 'EV charging', icon: '🔌', weight: 2, group: 'Building' },
+  { key: 'doorman', label: 'Doorman / concierge', weight: 3, group: 'Building' },
+  { key: 'rooftop', label: 'Rooftop / common deck', weight: 3, group: 'Building' },
+  { key: 'walk_in_closet', label: 'Walk-in closet', weight: 2, group: 'Interior' },
+  { key: 'high_ceilings', label: 'High ceilings', weight: 2, group: 'Interior' },
+  { key: 'storage', label: 'Storage unit', weight: 2, group: 'Building' },
+  { key: 'ev_charging', label: 'EV charging', weight: 2, group: 'Building' },
 ];
 
 const BY_KEY = Object.fromEntries(AMENITIES.map((a) => [a.key, a]));
 
 function amenity(key) {
-  return BY_KEY[key] || { key, label: key, icon: '•', weight: 1, group: 'Other' };
+  return BY_KEY[key] || { key, label: key, weight: 1, group: 'Other' };
 }
 
 // Total weight of an amenity list — the raw amenity richness of a unit.
@@ -319,12 +325,11 @@ const MAX_AMENITY_WEIGHT = AMENITIES.reduce((s, a) => s + a.weight, 0);
 //   yearBuilt     integer
 //   renovated     boolean — recent renovation
 //   available     ISO date string
-//   petPolicy     'friendly' | 'cats' | 'none'
+//   petPolicy     'friendly' | 'cats' | 'none' | '' (not listed)
 //   utilitiesIncluded  array of strings (e.g. ['heat','hot water'])
 //   concession    free-text incentive (e.g. '1 month free') or ''
 //   amenities     array of amenity keys (see data/amenities.js)
 //   images        optional array of photo URLs (first one is the cover)
-//   accent        tailwind-ish hue used for the placeholder when there's no photo
 //   url           optional external listing URL
 
 const SEED_LISTINGS = [];
@@ -672,6 +677,41 @@ function scoreAll(all, market = MARKET) {
   return all.map((l) => scoreListing(l, market));
 }
 
+/* ===== assets/js/components/icons.js ===== */
+// Inline icons from Lucide (https://lucide.dev, ISC license — see CREDITS.md).
+// One set, one stroke width (2), sizes 16/20/24. Icons are decorative by
+// default (aria-hidden); the control around them carries the accessible name.
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+const PATHS = {
+  'chevron-left': '<path d="m15 18-6-6 6-6"/>',
+  'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  'arrow-left': '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  'building-2': '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+  'external-link': '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+};
+
+function icon(name, { size = 16, className = '' } = {}) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
+  svg.setAttribute('width', String(size));
+  svg.setAttribute('height', String(size));
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('class', `ds-icon shrink-0 ${className}`.trim());
+  svg.innerHTML = PATHS[name] || '';
+  return svg;
+}
+
 /* ===== assets/js/components/scoreBadge.js ===== */
 // The Deal Score badge — a colored chip showing the 0–100 score and its label.
 // Tone maps to a Tailwind color scale shared across the app.
@@ -697,12 +737,13 @@ function scoreBadge(scored, size = 'sm') {
       el('div', { class: `text-3xl font-extrabold ${t.text} tabular-nums` }, String(scored.dealScore)),
       el('div', {}, [
         el('div', { class: `text-sm font-semibold ${t.text}` }, scored.grade.label),
-        el('div', { class: 'text-xs text-slate-500' }, 'Deal Score / 100'),
+        el('div', { class: 'text-xs text-slate-600' }, 'out of 100'),
       ]),
     ]);
   }
   return el('div', { class: `inline-flex items-center gap-1.5 rounded-full ring-1 ${t.ring} ${t.bg} ${t.text} px-2.5 py-1 text-xs font-semibold` }, [
-    el('span', { class: `inline-block h-1.5 w-1.5 rounded-full ${t.dot}` }),
+    el('span', { class: `inline-block h-1.5 w-1.5 rounded-full ${t.dot}`, 'aria-hidden': 'true' }),
+    el('span', { class: 'sr-only' }, 'Deal Score '),
     el('span', { class: 'tabular-nums' }, String(scored.dealScore)),
     el('span', {}, scored.grade.label),
   ]);
@@ -749,8 +790,8 @@ function pinIcon(s, { active, muted }) {
   return window.L.divIcon({
     className: 'ds-pin-wrap',
     html: `<span class="${cls}">${Math.round(Number(s.dealScore) || 0)}</span>`,
-    iconSize: [34, 22],
-    iconAnchor: [17, 11],
+    iconSize: [36, 24],
+    iconAnchor: [18, 12],
     popupAnchor: [0, -12],
   });
 }
@@ -763,8 +804,8 @@ function popup(s) {
       onError: (e) => e.target.remove(),
     }) : null,
     el('div', { class: 'text-sm font-bold text-slate-900' }, `${money(s.rent)}/mo · ${beds(s.beds)}`),
-    el('div', { class: 'truncate text-xs text-slate-700' }, s.title),
-    el('div', { class: 'text-xs text-slate-500' }, `${s.neighborhood} · Deal Score ${s.dealScore} · ${s.grade.label}`),
+    el('div', { class: 'truncate text-xs text-slate-800' }, s.title),
+    el('div', { class: 'text-xs text-slate-600' }, `${s.neighborhood} · Deal Score ${s.dealScore} · ${s.grade.label}`),
   ]);
 }
 
@@ -842,6 +883,7 @@ function listingsMap({ heightClass = 'h-[28rem]' } = {}) {
 
 
 
+
 function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
   const urls = photoUrls(listing);
   const n = urls.length;
@@ -866,33 +908,38 @@ function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
     'aria-label': `Photos of ${listing.title}`,
   }, slides);
 
-  const counter = el('div', { class: 'absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-medium text-white tabular-nums' });
+  const counter = el('div', { class: 'num absolute right-3 top-3 rounded-full bg-slate-900/75 px-2.5 py-0.5 text-xs font-medium text-white', 'aria-hidden': 'true' });
+  // Each dot is an 8px mark inside a 24px button, so the hit area meets the
+  // minimum target size without changing how it looks.
+  const dotMarks = urls.map(() => el('span', { class: 'block h-2 w-2 rounded-full bg-white/60', 'aria-hidden': 'true' }));
   const dots = urls.map((_, i) => el('button', {
     type: 'button',
     'aria-label': `Show photo ${i + 1}`,
-    class: 'h-2 w-2 rounded-full bg-white/60 transition',
+    class: 'grid h-6 w-6 place-items-center rounded-full',
     onClick: () => go(i),
-  }));
+  }, [dotMarks[i]]));
 
-  const arrow = (dir, label, glyph) => el('button', {
+  const arrow = (dir, label, iconName) => el('button', {
     type: 'button',
     'aria-label': label,
-    class: `absolute top-1/2 ${dir < 0 ? 'left-3' : 'right-3'} grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-lg font-bold text-slate-800 shadow hover:bg-white disabled:opacity-0`,
+    class: `absolute top-1/2 ${dir < 0 ? 'left-3' : 'right-3'} grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-slate-900 shadow hover:bg-white disabled:invisible`,
     onClick: () => go(index + dir),
-  }, glyph);
-  const prev = arrow(-1, 'Previous photo', '‹');
-  const next = arrow(1, 'Next photo', '›');
+  }, [icon(iconName, { size: 20 })]);
+  const prev = arrow(-1, 'Previous photo', 'chevron-left');
+  const next = arrow(1, 'Next photo', 'chevron-right');
 
   function sync() {
     counter.textContent = `${index + 1} / ${n}`;
-    dots.forEach((d, i) => { d.className = `h-2 w-2 rounded-full transition ${i === index ? 'bg-white' : 'bg-white/60'}`; });
+    dotMarks.forEach((d, i) => { d.className = `block h-2 w-2 rounded-full ${i === index ? 'bg-white' : 'bg-white/60'}`; });
+    dots.forEach((d, i) => d.setAttribute('aria-current', i === index ? 'true' : 'false'));
     prev.disabled = index === 0;
     next.disabled = index === n - 1;
   }
 
   function go(i) {
     const target = Math.max(0, Math.min(n - 1, i));
-    track.scrollTo({ left: target * track.clientWidth, behavior: 'smooth' });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollTo({ left: target * track.clientWidth, behavior: reduce ? 'auto' : 'smooth' });
   }
 
   // The scroll position is the source of truth (swipes and buttons both land here).
@@ -916,7 +963,7 @@ function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
     n > 1 ? prev : null,
     n > 1 ? next : null,
     n > 1 ? counter : null,
-    n > 1 ? el('div', { class: 'absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/30 px-2 py-1.5' }, dots) : null,
+    n > 1 ? el('div', { class: 'absolute bottom-2 left-1/2 flex -translate-x-1/2 rounded-full bg-slate-900/40 px-1' }, dots) : null,
   ]);
 }
 
@@ -930,8 +977,9 @@ function link(href, label, short = label) {
   return el('a', {
     href,
     'aria-label': label,
+    ...(active ? { 'aria-current': 'page' } : {}),
     class: 'whitespace-nowrap px-2.5 py-2 sm:px-3 rounded-lg text-sm font-medium ' +
-      (active ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'),
+      (active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'),
   }, [
     el('span', { class: 'sm:hidden' }, short),
     el('span', { class: 'hidden sm:inline' }, label),
@@ -942,11 +990,11 @@ function renderHeader(root) {
   const bar = el('header', { class: 'sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur' }, [
     el('div', { class: 'mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3' }, [
       el('a', { href: '#/', class: 'flex shrink-0 items-center gap-2' }, [
-        el('span', { class: 'grid h-8 w-8 place-items-center rounded-lg bg-emerald-500 text-white font-black' }, 'D'),
+        el('span', { class: 'grid h-8 w-8 place-items-center rounded-lg bg-accent text-white font-black', 'aria-hidden': 'true' }, 'D'),
         el('span', { class: 'text-lg font-extrabold tracking-tight text-slate-900' }, 'DealScore'),
-        el('span', { class: 'hidden sm:inline text-sm text-slate-400' }, 'NYC Apartments'),
+        el('span', { class: 'hidden sm:inline text-sm text-slate-600' }, 'NYC Apartments'),
       ]),
-      el('nav', { class: 'flex items-center gap-0.5 sm:gap-1' }, [
+      el('nav', { class: 'flex items-center gap-0.5 sm:gap-1', 'aria-label': 'Main' }, [
         link('#/', 'Browse'),
         link('#/methodology', 'How scoring works', 'Scoring'),
         link('#/add', 'Add listing', 'Add'),
@@ -964,18 +1012,11 @@ function renderHeader(root) {
 
 
 
-const ACCENT = {
-  rose: 'from-rose-200 to-rose-100', amber: 'from-amber-200 to-amber-100',
-  sky: 'from-sky-200 to-sky-100', emerald: 'from-emerald-200 to-emerald-100',
-  indigo: 'from-indigo-200 to-indigo-100', violet: 'from-violet-200 to-violet-100',
-  teal: 'from-teal-200 to-teal-100', cyan: 'from-cyan-200 to-cyan-100',
-  lime: 'from-lime-200 to-lime-100', orange: 'from-orange-200 to-orange-100',
-  stone: 'from-stone-200 to-stone-100',
-};
 
-function listingCard(scored) {
-  const accent = ACCENT[scored.accent] || ACCENT.sky;
+// opts.enter + opts.index: play the staggered entrance (first reveal only).
+function listingCard(scored, opts = {}) {
   const topAmenities = (scored.amenities || []).slice(0, 4).map((k) => amenity(k));
+  const extraAmenities = (scored.amenities || []).length - topAmenities.length;
   const photos = photoUrls(scored);
   const cover = photos[0];
 
@@ -985,52 +1026,58 @@ function listingCard(scored) {
   const rough = scored.priceConfidence === 'low';
   const note = rough ? ' · rough estimate' : '';
   const savingsLine = savings == null
-    ? el('div', { class: 'text-xs text-slate-400' }, 'No StreetEasy benchmark yet')
+    ? el('p', { class: 'text-xs text-slate-600' }, 'No StreetEasy benchmark yet')
     : savings > 30
-      ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-emerald-600'}` }, `~${money(Math.abs(savings))}/mo below StreetEasy median${note}`)
+      ? el('p', { class: `num text-xs font-semibold ${rough ? 'text-slate-600' : 'text-emerald-700'}` }, `~${money(Math.abs(savings))}/mo below StreetEasy median${note}`)
       : savings < -30
-        ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-rose-500'}` }, `~${money(Math.abs(savings))}/mo above StreetEasy median${note}`)
-        : el('div', { class: 'text-xs text-slate-400' }, `Around the StreetEasy median${note}`);
+        ? el('p', { class: `num text-xs font-semibold ${rough ? 'text-slate-600' : 'text-rose-700'}` }, `~${money(Math.abs(savings))}/mo above StreetEasy median${note}`)
+        : el('p', { class: 'text-xs text-slate-600' }, `Around the StreetEasy median${note}`);
 
   return el('a', {
-    href: `#/listing/${scored.id}`,
-    class: 'group block overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:shadow-lg hover:-translate-y-0.5',
+    href: `#/listing/${encodeURIComponent(scored.id)}`,
+    class: `ds-card block rounded-2xl border border-slate-200 bg-white${opts.enter ? ' ds-enter' : ''}`,
+    style: opts.enter ? `--i:${opts.index || 0}` : null,
   }, [
-    el('div', { class: `relative h-36 bg-gradient-to-br ${accent}` }, [
-      // Cover photo over the colored placeholder; if it fails to load, the
-      // placeholder shows through.
-      cover ? el('img', {
-        src: cover, alt: '', loading: 'lazy',
-        class: 'absolute inset-0 h-full w-full object-cover',
-        onError: (e) => e.target.remove(),
-      }) : null,
+    // Cover photo, or a neutral placeholder. Inner radius = 16px card − 1px border.
+    el('div', { class: 'relative h-36 overflow-hidden rounded-t-[15px] bg-slate-100' }, [
+      cover
+        ? el('img', {
+          src: cover, alt: '', loading: 'lazy',
+          class: 'absolute inset-0 h-full w-full object-cover',
+          onError: (e) => e.target.remove(),
+        })
+        : null,
+      el('div', { class: 'absolute inset-0 grid place-items-center text-slate-400' }, cover ? null : icon('building-2', { size: 24 })),
       el('div', { class: 'absolute left-3 top-3' }, [scoreBadge(scored, 'sm')]),
       scored._source === 'user'
-        ? el('div', { class: 'absolute right-3 top-3 rounded-full bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white' }, 'Draft')
+        ? el('div', { class: 'absolute right-3 top-3 rounded-full bg-slate-900/85 px-2 py-0.5 text-xs font-medium text-white' }, 'Draft')
         : null,
-      cover
-        ? el('div', { class: 'absolute bottom-3 left-3 rounded-md bg-white/85 px-2 py-0.5 text-xs font-semibold text-slate-700' }, scored.neighborhood)
-        : el('div', { class: 'absolute bottom-3 left-3 text-sm font-semibold text-slate-700/70' }, scored.neighborhood),
+      el('div', { class: 'absolute bottom-3 left-3 rounded-md bg-white/90 px-2 py-0.5 text-xs font-semibold text-slate-800' }, scored.neighborhood),
       photos.length > 1
-        ? el('div', { class: 'absolute bottom-3 right-3 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white' }, `📷 ${photos.length}`)
+        ? el('div', { class: 'num absolute bottom-3 right-3 flex items-center gap-1 rounded-md bg-slate-900/75 px-1.5 py-0.5 text-xs font-medium text-white' }, [
+          icon('camera', { size: 12 }),
+          `${photos.length}`,
+          el('span', { class: 'sr-only' }, ' photos'),
+        ])
         : null,
     ]),
     el('div', { class: 'p-4' }, [
       el('div', { class: 'flex items-baseline justify-between gap-2' }, [
-        el('div', { class: 'text-lg font-bold text-slate-900' }, money(scored.rent)),
-        el('div', { class: 'text-xs text-slate-500' }, `${beds(scored.beds)} · ${scored.baths} ba${scored.sqft > 0 ? ` · ${scored.sqft} sqft` : ''}`),
+        el('p', { class: 'num text-lg font-bold text-slate-900' }, money(scored.rent)),
+        el('p', { class: 'num text-xs text-slate-600' }, `${beds(scored.beds)} · ${scored.baths} ba${scored.sqft > 0 ? ` · ${scored.sqft} sqft` : ''}`),
       ]),
       savingsLine,
-      el('div', { class: 'mt-1 truncate text-sm font-medium text-slate-700' }, scored.title),
-      el('div', { class: 'truncate text-xs text-slate-400' }, `${scored.address} · ${scored.city}`),
-      el('div', { class: 'mt-3 flex flex-wrap gap-1' }, [
-        ...topAmenities.map((a) =>
-          el('span', { class: 'rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600' }, `${a.icon} ${a.label}`)),
-        scored.amenities.length > 4
-          ? el('span', { class: 'rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-500' }, `+${scored.amenities.length - 4}`)
-          : null,
-      ]),
-      scored.sqft > 0 ? el('div', { class: 'mt-2 text-xs text-slate-400' }, ppsfText(scored.rent, scored.sqft)) : null,
+      el('p', { class: 'mt-1 truncate text-sm font-medium text-slate-900' }, scored.title),
+      el('p', { class: 'truncate text-xs text-slate-600' }, [scored.address, scored.address ? ' · ' : '', scored.city].join('')),
+      topAmenities.length
+        ? el('ul', { class: 'mt-3 flex flex-wrap gap-1', 'aria-label': 'Amenities' }, [
+          ...topAmenities.map((a) => el('li', { class: 'rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700' }, a.label)),
+          extraAmenities > 0
+            ? el('li', { class: 'rounded-md bg-slate-100 px-1.5 py-0.5 text-xs text-slate-700' }, `+${extraAmenities} more`)
+            : null,
+        ])
+        : null,
+      scored.sqft > 0 ? el('p', { class: 'num mt-2 text-xs text-slate-600' }, ppsfText(scored.rent, scored.sqft)) : null,
     ]),
   ]);
 }
@@ -1044,10 +1091,10 @@ function listingCard(scored) {
 
 
 function select(label, value, options, onChange) {
-  return el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
+  return el('label', { class: 'ds-label flex flex-col gap-1' }, [
     label,
     el('select', {
-      class: 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
+      class: 'ds-field',
       onChange: (e) => onChange(e.target.value),
     }, options.map((o) =>
       el('option', { value: o.value, ...(String(o.value) === String(value) ? { selected: 'selected' } : {}) }, o.label))),
@@ -1081,19 +1128,20 @@ function filterBar(state, derived, onChange) {
       select('Borough', state.city, cityOpts, (v) => set({ city: v, neighborhood: '' })),
       select('Neighborhood', state.neighborhood, nbhdOpts, (v) => set({ neighborhood: v })),
       select('Bedrooms', state.beds, bedOpts, (v) => set({ beds: v })),
-      el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
+      el('label', { class: 'ds-label flex flex-col gap-1' }, [
         'Max rent',
+        // Text input so "$3,000" or "3000/mo" works; only the digits are kept.
         el('input', {
-          type: 'number', value: state.maxRent || '', placeholder: 'Any', min: '0', step: '50',
-          class: 'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
-          onInput: (e) => set({ maxRent: e.target.value }),
+          type: 'text', inputmode: 'numeric', autocomplete: 'off', value: state.maxRent || '', placeholder: 'Any',
+          class: 'ds-field num',
+          onInput: (e) => set({ maxRent: String(e.target.value).replace(/\.\d*$/, '').replace(/\D/g, '') }),
         }),
       ]),
-      el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [
-        'Must have',
-        el('label', { class: 'flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700' }, [
+      el('div', { class: 'flex flex-col gap-1' }, [
+        el('span', { class: 'ds-label', id: 'filter-must-have' }, 'Must have'),
+        el('label', { class: 'flex min-h-[2.5rem] items-center gap-2 rounded-lg border border-[color:var(--border-control)] bg-white px-3 py-2 text-sm text-slate-800' }, [
           el('input', {
-            type: 'checkbox', ...(state.laundry ? { checked: 'checked' } : {}),
+            type: 'checkbox', 'aria-describedby': 'filter-must-have', ...(state.laundry ? { checked: 'checked' } : {}),
             onChange: (e) => set({ laundry: e.target.checked }),
           }),
           'In-unit laundry',
@@ -1188,14 +1236,13 @@ function marketSummary(list) {
   const medRent = median(list.map((l) => l.rent));
   const greatDeals = list.filter((l) => l.dealScore >= 80).length;
   const stat = (label, value) => el('div', {}, [
-    el('div', { class: 'text-xs uppercase tracking-wide text-slate-400' }, label),
-    el('div', { class: 'text-lg font-bold text-slate-900' }, value),
+    el('dt', { class: 'text-xs font-medium text-slate-600' }, label),
+    el('dd', { class: 'num text-lg font-bold text-slate-900' }, value),
   ]);
-  return el('div', { class: 'grid grid-cols-2 gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-4' }, [
-    stat('Listings', num(list.length)),
+  return el('dl', { class: 'flex flex-wrap gap-x-10 gap-y-3' }, [
     stat('Median rent', money(medRent)),
-    stat('Median $/sqft', med ? '$' + med.toFixed(2) : '—'),
-    stat('Great deals', `${greatDeals}`),
+    med ? stat('Median $/sqft', '$' + med.toFixed(2)) : null,
+    stat('Great deals (80+)', num(greatDeals)),
   ]);
 }
 
@@ -1203,8 +1250,8 @@ function viewToggle(view, onChange) {
   const btn = (value, label) => el('button', {
     type: 'button',
     'aria-pressed': String(view === value),
-    class: 'rounded-md px-3 py-1.5 text-sm font-medium ' +
-      (view === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'),
+    class: 'rounded px-3 py-1.5 text-sm font-medium ' +
+      (view === value ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'),
     onClick: () => onChange(value),
   }, label);
   return el('div', { class: 'inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1', role: 'group', 'aria-label': 'View' }, [
@@ -1216,9 +1263,10 @@ async function homePage(root, ctx) {
   const all = scoreAll(await getListings());
   let state = stateFromQuery(ctx.query);
   let map = null; // created when the map view opens, reused while it stays open
+  let firstReveal = true; // stagger the cards in once, not on every filter change
 
   const filtersSlot = el('div');
-  const summarySlot = el('div', { class: 'my-4' });
+  const summarySlot = el('div', { class: 'mt-6 mb-4' });
   const toolbarSlot = el('div', { class: 'mb-3 flex items-center justify-between gap-3' });
   const mapSlot = el('div');
   const gridSlot = el('div');
@@ -1245,10 +1293,10 @@ async function homePage(root, ctx) {
 
     const unmapped = filtered.filter((l) => !hasLocation(l)).length;
     mount(toolbarSlot, el('div', { class: 'flex w-full items-center justify-between gap-3' }, [
-      el('div', { class: 'text-sm text-slate-500' }, [
+      el('p', { class: 'num text-sm text-slate-600', role: 'status' }, [
         `${filtered.length} listing${filtered.length === 1 ? '' : 's'}`,
         state.view === 'map' && unmapped
-          ? el('span', { class: 'text-slate-400' }, ` · ${unmapped} without a location not shown on the map`)
+          ? ` · ${unmapped} without a location not shown on the map`
           : null,
       ]),
       viewToggle(state.view, (view) => update({ ...state, view })),
@@ -1264,26 +1312,29 @@ async function homePage(root, ctx) {
       map = null;
     }
 
+    const enter = firstReveal;
+    firstReveal = false;
     mount(gridSlot, filtered.length
-      ? el('div', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' }, filtered.map(listingCard))
+      ? el('ul', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', 'aria-label': 'Listings' },
+        filtered.map((s, index) => el('li', {}, [listingCard(s, { enter, index })])))
       : all.length
-        ? el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
+        ? el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-600' },
           'No listings match these filters. Try widening your search.')
         : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center' }, [
-          el('p', { class: 'font-semibold text-slate-700' }, 'No listings yet'),
-          el('p', { class: 'mt-1 text-sm text-slate-500' },
-            'Add an apartment you\'re considering to see its Deal Score against StreetEasy\'s market data.'),
-          el('a', { href: '#/add', class: 'mt-4 inline-block rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700' }, 'Add a listing'),
+          el('h2', { class: 'font-semibold text-slate-900' }, 'No listings yet'),
+          el('p', { class: 'mt-1 text-sm text-slate-600' },
+            'Add an apartment you\'re considering to see how its rent compares with StreetEasy\'s median for the neighborhood.'),
+          el('a', { href: '#/add', class: 'mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover' }, 'Add a listing'),
         ]));
   }
 
   mount(root, el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
     el('div', { class: 'mb-5' }, [
-      el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
-      el('p', { class: 'text-sm text-slate-500' },
-        'Every listing is scored against StreetEasy\'s median asking rent for its neighborhood and size — sorted best deal first.'),
-      el('p', { class: 'mt-1 text-xs text-slate-400' }, MARKET.asOf
-        ? [`Market data: `, el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-600' }, 'StreetEasy'), `, ${monthLabel(MARKET.asOf)}.`]
+      el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'How good a deal is that NYC apartment?'),
+      el('p', { class: 'mt-1 max-w-prose text-sm text-slate-700' },
+        'Each apartment you add gets a Deal Score from 0 to 100, led by how its rent compares with StreetEasy\'s median asking rent for the same neighborhood and size. Best deals first.'),
+      el('p', { class: 'mt-1 text-xs text-slate-600' }, MARKET.asOf
+        ? [`Market data: `, el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-900' }, 'StreetEasy'), `, ${monthLabel(MARKET.asOf)}.`]
         : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
     ]),
     filtersSlot,
@@ -1309,19 +1360,11 @@ async function homePage(root, ctx) {
 
 
 
-const HERO_ACCENT = {
-  rose: 'from-rose-300 to-rose-100', amber: 'from-amber-300 to-amber-100',
-  sky: 'from-sky-300 to-sky-100', emerald: 'from-emerald-300 to-emerald-100',
-  indigo: 'from-indigo-300 to-indigo-100', violet: 'from-violet-300 to-violet-100',
-  teal: 'from-teal-300 to-teal-100', cyan: 'from-cyan-300 to-cyan-100',
-  lime: 'from-lime-300 to-lime-100', orange: 'from-orange-300 to-orange-100',
-  stone: 'from-stone-300 to-stone-100',
-};
 
 function bar(points, max) {
   const pctW = Math.round((points / max) * 100);
-  return el('div', { class: 'h-2 w-full overflow-hidden rounded-full bg-slate-100' }, [
-    el('div', { class: 'h-full rounded-full bg-emerald-500', style: `width:${pctW}%` }),
+  return el('div', { class: 'h-2 w-full overflow-hidden rounded-full bg-slate-200', 'aria-hidden': 'true' }, [
+    el('div', { class: 'h-full rounded-full bg-accent', style: `width:${pctW}%` }),
   ]);
 }
 
@@ -1330,12 +1373,12 @@ function breakdownRow(b) {
     el('div', { class: 'flex items-baseline justify-between' }, [
       el('div', { class: 'text-sm font-semibold text-slate-800' }, [
         b.label,
-        b.bonus ? el('span', { class: 'ml-1.5 rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700' }, 'Bonus') : null,
+        b.bonus ? el('span', { class: 'ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700' }, 'bonus') : null,
       ]),
-      el('div', { class: 'text-sm tabular-nums text-slate-500' }, b.bonus ? `+${b.points.toFixed(1)} / ${b.max}` : `${b.points.toFixed(1)} / ${b.max}`),
+      el('div', { class: 'num text-sm text-slate-600' }, b.bonus ? `+${b.points.toFixed(1)} / ${b.max}` : `${b.points.toFixed(1)} / ${b.max}`),
     ]),
     el('div', { class: 'mt-1.5' }, [bar(b.points, b.max)]),
-    el('div', { class: 'mt-1 text-xs text-slate-500' }, b.detail),
+    el('div', { class: 'mt-1 text-xs text-slate-600' }, b.detail),
   ]);
 }
 
@@ -1352,15 +1395,15 @@ const LEVEL_NOUN = { neighborhood: 'neighborhood', submarket: 'area', borough: '
 function benchmarkExplainer(s) {
   const b = s.benchmark;
   const bed = bedLabel(bedClass(s.beds));
-  const credit = el('p', { class: 'mt-2 text-xs text-slate-400' }, [
+  const credit = el('p', { class: 'mt-2 text-xs text-slate-600' }, [
     'Source: ',
-    el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-600' }, 'StreetEasy Data Dashboard'),
+    el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-900' }, 'StreetEasy Data Dashboard'),
     s.benchmarkMonth ? `, ${s.benchmarkMonth}` : '',
     '.',
   ]);
   if (!b) {
     return el('div', {}, [
-      el('p', { class: 'mt-2 text-xs text-slate-500' }, MARKET.areas.length
+      el('p', { class: 'mt-2 text-xs text-slate-600' }, MARKET.areas.length
         ? `StreetEasy doesn't publish a ${bed} median for ${s.neighborhood} or ${s.city}, so this listing's price can't be benchmarked yet.`
         : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
       credit,
@@ -1387,7 +1430,7 @@ function benchmarkExplainer(s) {
 
 function fact(label, value) {
   return el('div', { class: 'rounded-xl bg-slate-50 px-3 py-2' }, [
-    el('div', { class: 'text-xs text-slate-400' }, label),
+    el('div', { class: 'text-xs text-slate-600' }, label),
     el('div', { class: 'text-sm font-semibold text-slate-800' }, value),
   ]);
 }
@@ -1397,16 +1440,16 @@ async function listingPage(root, ctx) {
   const raw = all.find((l) => l.id === ctx.params.id);
   if (!raw) {
     mount(root, el('div', { class: 'mx-auto max-w-3xl px-4 py-16 text-center' }, [
-      el('p', { class: 'text-slate-500' }, 'Listing not found.'),
-      el('a', { href: '#/', class: 'mt-3 inline-block text-emerald-600 underline' }, 'Back to browse'),
+      el('h1', { class: 'text-xl font-bold text-slate-900' }, 'Listing not found'),
+      el('p', { class: 'mt-1 text-sm text-slate-600' }, 'It may have been removed from this browser.'),
+      el('a', { href: '#/', class: 'mt-3 inline-block py-1 text-accent underline' }, 'Go to Browse'),
     ]));
     return;
   }
   // Score everything so the location map can show neighbors' scores too.
   const scored = scoreAll(all);
   const s = scored.find((l) => l.id === raw.id);
-  const t = toneOf(s.grade);
-  const accent = HERO_ACCENT[s.accent] || HERO_ACCENT.sky;
+  document.title = `${s.title} — DealScore`;
   const externalUrl = s.url ? httpUrl(s.url) : null;
   const areaHash = `#/?city=${encodeURIComponent(s.citySlug)}&neighborhood=${encodeURIComponent(s.neighborhoodSlug)}`;
   const locMap = hasLocation(s) ? listingsMap({ heightClass: 'h-64' }) : null;
@@ -1414,8 +1457,8 @@ async function listingPage(root, ctx) {
   const savingsBanner = s.monthlySavings != null
     ? el('div', {
       class: 'rounded-xl px-4 py-3 text-sm font-medium ' +
-        (s.monthlySavings > 30 ? 'bg-emerald-50 text-emerald-700'
-          : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
+        (s.monthlySavings > 30 ? 'bg-emerald-50 text-emerald-800'
+          : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-800' : 'bg-slate-100 text-slate-700'),
     },
     s.monthlySavings > 30
       ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below StreetEasy's median for ${s.benchmark.area.name} ${bedLabel(bedClass(s.beds))}s (~${money(s.monthlySavings * 12)}/yr).`
@@ -1424,22 +1467,15 @@ async function listingPage(root, ctx) {
         : `Priced right around StreetEasy's median for ${s.benchmark.area.name} ${bedLabel(bedClass(s.beds))}s.`)
     : null;
 
-  const amenityGrid = el('div', { class: 'grid grid-cols-2 gap-2 sm:grid-cols-3' },
-    (s.amenities || []).map((k) => {
-      const a = amenity(k);
-      return el('div', { class: 'flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700' },
-        [el('span', {}, a.icon), el('span', {}, a.label)]);
-    }));
+  const amenityGrid = (s.amenities || []).length
+    ? el('ul', { class: 'grid grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-800 sm:grid-cols-3' },
+      s.amenities.map((k) => el('li', {}, amenity(k).label)))
+    : el('p', { class: 'text-sm text-slate-600' }, 'None listed.');
 
   const page = el('div', { class: 'mx-auto max-w-5xl px-4 py-6' }, [
-    el('a', { href: '#/', class: 'mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800' }, '← Back to results'),
-    // Photos when the listing has them; otherwise the colored placeholder.
-    photoUrls(s).length
-      ? el('div', { class: 'mb-5' }, [photoGallery(s)])
-      : el('div', { class: `relative mb-5 h-56 overflow-hidden rounded-2xl bg-gradient-to-br ${accent}` }, [
-        el('div', { class: 'absolute bottom-4 left-4 rounded-lg bg-white/70 px-3 py-1 text-sm font-semibold text-slate-700 backdrop-blur' },
-          `${s.neighborhood}, ${s.city}`),
-      ]),
+    el('a', { href: '#/', class: 'mb-4 inline-flex items-center gap-1.5 py-1 text-sm text-slate-700 hover:text-slate-900' }, [icon('arrow-left'), 'Back to results']),
+    // Photos when the listing has them; no decorative placeholder otherwise.
+    photoUrls(s).length ? el('div', { class: 'mb-5' }, [photoGallery(s)]) : null,
 
     el('div', { class: 'grid grid-cols-1 gap-6 lg:grid-cols-3' }, [
       // Main column
@@ -1447,31 +1483,31 @@ async function listingPage(root, ctx) {
         el('div', { class: 'flex flex-wrap items-start justify-between gap-3' }, [
           el('div', {}, [
             el('h1', { class: 'text-2xl font-extrabold text-slate-900' }, s.title),
-            el('div', { class: 'text-sm text-slate-500' }, `${s.address} · ${s.neighborhood}, ${s.city}`),
+            el('p', { class: 'text-sm text-slate-600' }, [s.address, `${s.neighborhood}, ${s.city}`].filter(Boolean).join(' · ')),
           ]),
           el('div', { class: 'text-right' }, [
-            el('div', { class: 'text-2xl font-extrabold text-slate-900' }, `${money(s.rent)}/mo`),
-            s.sqft > 0 ? el('div', { class: 'text-xs text-slate-400' }, ppsfText(s.rent, s.sqft)) : null,
+            el('p', { class: 'num text-2xl font-extrabold text-slate-900' }, `${money(s.rent)}/mo`),
+            s.sqft > 0 ? el('p', { class: 'num text-xs text-slate-600' }, ppsfText(s.rent, s.sqft)) : null,
           ]),
         ]),
         el('div', { class: 'mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4' }, [
           fact('Type', bedsLong(s.beds)),
           fact('Bathrooms', String(s.baths)),
           fact('Size', s.sqft > 0 ? `${s.sqft} sqft` : 'Not listed'),
-          fact('Available', s.available),
+          fact('Available', s.available || 'Not listed'),
         ]),
         savingsBanner ? el('div', { class: 'mt-4' }, [savingsBanner]) : null,
         el('h2', { class: 'mt-6 text-lg font-bold text-slate-900' }, 'Amenities'),
         el('div', { class: 'mt-2' }, [amenityGrid]),
         s.concession
-          ? el('div', { class: 'mt-4 rounded-xl bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800' }, `🎁 Move-in special: ${s.concession}`)
+          ? el('p', { class: 'mt-4 rounded-xl bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800' }, `Move-in special: ${s.concession}`)
           : null,
         (s.utilitiesIncluded || []).length
-          ? el('div', { class: 'mt-2 text-sm text-slate-600' }, `Utilities included: ${s.utilitiesIncluded.map(titleize).join(', ')}`)
+          ? el('p', { class: 'mt-2 text-sm text-slate-700' }, `Utilities included: ${s.utilitiesIncluded.map(titleize).join(', ')}`)
           : null,
         locMap ? el('h2', { class: 'mt-6 text-lg font-bold text-slate-900' }, 'Location') : null,
         locMap ? el('div', { class: 'mt-2' }, [locMap.node]) : null,
-        locMap ? el('p', { class: 'mt-1 text-xs text-slate-400' },
+        locMap ? el('p', { class: 'mt-1 text-xs text-slate-600' },
           `Pins show Deal Scores. Other ${s.city} listings are faded; click one to compare.`) : null,
       ]),
 
@@ -1479,24 +1515,26 @@ async function listingPage(root, ctx) {
       el('div', { class: 'lg:col-span-1' }, [
         el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-5' }, [
           el('div', { class: 'flex items-center justify-between' }, [
-            el('h2', { class: 'text-sm font-bold uppercase tracking-wide text-slate-500' }, 'Deal Score'),
+            el('h2', { class: 'text-sm font-bold text-slate-900' }, 'Deal Score'),
           ]),
           el('div', { class: 'mt-3' }, [scoreBadge(s, 'lg')]),
           el('div', { class: 'mt-4 divide-y divide-slate-100' }, s.breakdown.map(breakdownRow)),
-          el('a', { href: '#/methodology', class: 'mt-4 inline-block text-xs text-emerald-600 underline' },
+          el('a', { href: '#/methodology', class: 'mt-3 inline-block py-1 text-sm text-accent underline hover:text-accent-hover' },
             'How is this calculated?'),
         ]),
         el('div', { class: 'mt-4 rounded-2xl border border-slate-200 bg-white p-5' }, [
-          el('div', { class: 'text-xs text-slate-400' }, 'Typical rent (StreetEasy median)'),
-          el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
+          el('h2', { class: 'text-sm font-bold text-slate-900' }, 'Typical rent (StreetEasy median)'),
+          el('p', { class: 'num mt-1 text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
           benchmarkExplainer(s),
           externalUrl
-            ? el('a', { href: externalUrl, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
+            ? el('a', { href: externalUrl, target: '_blank', rel: 'noopener', class: 'mt-3 flex items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover' }, [
+              'View original listing', icon('external-link'), el('span', { class: 'sr-only' }, ' (opens in a new tab)'),
+            ])
             : null,
           el('a', {
             href: areaHash,
             class: 'mt-2 block rounded-lg border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-800 hover:bg-slate-50',
-          }, `More in ${s.neighborhood}`),
+          }, `See more in ${s.neighborhood}`),
         ]),
       ]),
     ]),
@@ -1513,8 +1551,8 @@ async function listingPage(root, ctx) {
 
 const COMPONENTS = [
   ['Price vs. StreetEasy median', '60 pts', 'The listing\'s rent compared with StreetEasy\'s median asking rent for the same neighborhood and bedroom count (studio, 1, 2, or 3+ beds). Right at the median earns half marks; 25% below earns full marks; 25% above earns none. This is the single biggest factor.'],
-  ['Amenity richness', '22 pts', 'Each amenity carries a weight reflecting how much renters typically pay for it (laundry, parking, central A/C and outdoor space move rent the most). A well-equipped doorman building earns full marks.'],
-  ['In-unit laundry', '10 pts', 'Called out on its own because it\'s one of the most-requested features. In-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
+  ['Amenity richness', '22 pts', 'Each amenity has a hand-set weight; in-unit laundry, parking, central A/C, dishwashers and outdoor space weigh the most. The weights are a judgment call, not fitted to rent data. An apartment with most of them, such as a doorman building with in-unit laundry, earns full marks.'],
+  ['In-unit laundry', '10 pts', 'Scored on its own, on top of the amenity score, so laundry counts extra. An in-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
   ['Condition & extras', '8 pts', 'Recent renovation or newer construction, included utilities, and move-in concessions each add points.'],
   ['Space bonus', 'up to +10', 'Only when the listing gives its square footage. A unit 30% or more bigger than a typical NYC apartment of its size earns the full bonus. Smaller units, and listings without square footage, simply get no bonus. The total is capped at 100.'],
 ];
@@ -1523,7 +1561,7 @@ function row([label, pts, desc]) {
   return el('div', { class: 'border-t border-slate-100 py-4' }, [
     el('div', { class: 'flex items-baseline justify-between gap-3' }, [
       el('div', { class: 'font-semibold text-slate-800' }, label),
-      el('div', { class: 'whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-bold text-emerald-700' }, pts),
+      el('div', { class: 'num whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-bold text-accent' }, pts),
     ]),
     el('p', { class: 'mt-1 text-sm text-slate-600' }, desc),
   ]);
@@ -1537,7 +1575,7 @@ function gradeChip(label, range, cls) {
 
 const methodCard = (children) => el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, children);
 const methodPara = (text) => el('p', { class: 'mt-1 text-sm text-slate-600' }, text);
-const methodLink = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-emerald-700 underline' }, text);
+const methodLink = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-accent underline' }, text);
 
 function methodologyPage(root) {
   const page = el('div', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
@@ -1584,17 +1622,21 @@ function methodologyPage(root) {
         `2-bed ~${TYPICAL_SQFT[2]}, 3+ bed ~${TYPICAL_SQFT[3]}.`),
     ]),
 
-    el('p', { class: 'mt-6 text-xs text-slate-400' },
+    el('p', { class: 'mt-6 text-xs text-slate-600' },
       'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js. DealScore is not affiliated with StreetEasy.'),
   ]);
   mount(root, page);
 }
 
 /* ===== assets/js/pages/add.js ===== */
-// Add Listing page — a no-backend way to start entering real listings. New
-// listings are saved in your browser (localStorage) and immediately show up in
-// Browse tagged "Draft". Use "Export JSON" to copy them into
-// assets/js/data/listings.js (or to seed your live backend later).
+// Add Listing page — enter an apartment you're considering. Listings are saved
+// in this browser only (localStorage) and show up in Browse tagged "Draft".
+// "Export JSON" copies them out (into assets/js/data/listings.js or a backend).
+//
+// Form layout follows docs/DESIGN_GUIDELINES.md: required fields first,
+// optional details grouped and labelled, amenities chunked by category, and
+// forgiving input ("$3,200/mo" is a rent; "40.76, -73.92" fills both
+// coordinates).
 
 
 
@@ -1602,24 +1644,44 @@ function methodologyPage(root) {
 
 
 
-function slug(s) {
+
+const AMENITY_GROUP_ORDER = ['Laundry', 'Kitchen', 'Comfort', 'Interior', 'Building', 'Policy'];
+
+function addSlug(s) {
   return String(s).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-const ACCENTS = ['rose', 'amber', 'sky', 'emerald', 'indigo', 'violet', 'teal', 'cyan', 'lime', 'orange', 'stone'];
+// "$3,200/mo" → 3200; "" → NaN.
+function parseAmount(v) {
+  const digits = String(v || '').replace(/\.\d*$/, '').replace(/[^\d]/g, '');
+  return digits ? Number(digits) : NaN;
+}
 
-function field(label, input) {
+// "40.7679, -73.9205" or "40.7679 -73.9205" → [40.7679, -73.9205].
+function parseCoordPair(v) {
+  const m = String(v || '').match(/(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)/);
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+function field(labelText, control, { hint, optional } = {}) {
+  const hintId = hint ? `hint-${control.name}` : null;
+  if (hintId) control.setAttribute('aria-describedby', hintId);
   return el('label', { class: 'flex flex-col gap-1' }, [
-    el('span', { class: 'text-xs font-medium text-slate-500' }, label), input,
+    el('span', { class: 'ds-label' }, [labelText, optional ? el('span', { class: 'font-normal text-slate-600' }, ' (optional)') : null]),
+    control,
+    hint ? el('span', { class: 'ds-hint', id: hintId }, hint) : null,
   ]);
 }
 
 function input(name, attrs = {}) {
-  return el('input', {
-    name,
-    class: 'rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
-    ...attrs,
-  });
+  return el('input', { name, class: 'ds-field', ...attrs });
+}
+
+function fieldset(legend, children, note) {
+  return el('fieldset', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
+    el('legend', { class: 'mb-3 text-base font-bold text-slate-900' }, [legend, note ? el('span', { class: 'ml-2 text-sm font-normal text-slate-600' }, note) : null]),
+    ...children,
+  ]);
 }
 
 // Suggest StreetEasy's own area names so listings match its benchmarks.
@@ -1641,163 +1703,397 @@ function fillBorough(nbhdInput) {
   if (matches.length === 1 && matches[0].borough) city.value = matches[0].borough;
 }
 
+function amenityGroups() {
+  const groups = AMENITY_GROUP_ORDER
+    .map((g) => [g, AMENITIES.filter((a) => a.group === g)])
+    .filter(([, items]) => items.length);
+  return el('fieldset', {}, [
+    el('legend', { class: 'mb-3 text-base font-bold text-slate-900' }, ['Amenities', el('span', { class: 'ml-2 text-sm font-normal text-slate-600' }, 'Check all that apply')]),
+    el('div', { class: 'grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-3' }, groups.map(([group, items]) =>
+      el('div', { role: 'group', 'aria-label': group }, [
+        el('p', { class: 'ds-label mb-1' }, group),
+        ...items.map((a) => el('label', { class: 'flex min-h-[2rem] items-center gap-2 text-sm text-slate-800' }, [
+          el('input', { type: 'checkbox', name: 'amenity', value: a.key }),
+          a.label,
+        ])),
+      ]))),
+  ]);
+}
+
 function addPage(root) {
+  let lastTrigger = null;
+
   function render(message) {
-    const form = el('form', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
-      field('Title', input('title', { required: 'required', placeholder: 'Sunny Astoria 1BR' })),
-      field('Street address', input('address', { placeholder: '30-14 31st St' })),
-      field('Latitude (optional, for the map)', input('lat', { type: 'number', step: 'any', min: '-90', max: '90', placeholder: '40.7679' })),
-      field('Longitude (optional, for the map)', input('lng', { type: 'number', step: 'any', min: '-180', max: '180', placeholder: '-73.9205' })),
-      field('Borough', input('city', { required: 'required', placeholder: 'Queens', list: 'se-boroughs', autocomplete: 'off' })),
-      field('Neighborhood (StreetEasy name)', input('neighborhood', {
-        required: 'required', placeholder: 'Astoria', list: 'se-neighborhoods', autocomplete: 'off',
-        onChange: (e) => fillBorough(e.target),
-      })),
-      field('Monthly rent ($)', input('rent', { type: 'number', required: 'required', min: '0', step: '25' })),
-      field('Square feet (optional, earns the space bonus)', input('sqft', { type: 'number', min: '0', step: '10' })),
-      field('Bedrooms (0 = studio)', input('beds', { type: 'number', required: 'required', min: '0', max: '6', value: '1' })),
-      field('Bathrooms', input('baths', { type: 'number', required: 'required', min: '1', max: '6', step: '0.5', value: '1' })),
-      field('Year built', input('yearBuilt', { type: 'number', min: '1850', max: '2030', placeholder: '2018' })),
-      field('Available date', input('available', { type: 'date' })),
-      field('Utilities included (comma-separated)', input('utilities', { placeholder: 'heat, hot water' })),
-      field('Move-in concession', input('concession', { placeholder: '1 month free' })),
-      el('label', { class: 'flex items-center gap-2 text-sm text-slate-700' }, [
-        el('input', { type: 'checkbox', name: 'renovated' }), 'Recently renovated',
+    const rentInput = input('rent', { required: 'required', inputmode: 'numeric', autocomplete: 'off', placeholder: '3200' });
+    const latInput = input('lat', { inputmode: 'decimal', autocomplete: 'off', placeholder: '40.7679' });
+    const lngInput = input('lng', { inputmode: 'decimal', autocomplete: 'off', placeholder: '-73.9205' });
+    // Pasting "lat, lng" into either box fills both.
+    for (const box of [latInput, lngInput]) {
+      box.addEventListener('change', () => {
+        const pair = parseCoordPair(box.value);
+        if (pair) { latInput.value = String(pair[0]); lngInput.value = String(pair[1]); }
+      });
+    }
+    rentInput.addEventListener('input', () => rentInput.setCustomValidity(''));
+
+    const form = el('form', { class: 'flex flex-col gap-8' }, [
+      fieldset('The apartment', [
+        field('Title', input('title', { required: 'required', placeholder: 'Sunny Astoria 1BR' })),
+        field('Monthly rent', rentInput, { hint: 'Dollars per month, e.g. 3200 or $3,200.' }),
+        field('Neighborhood', input('neighborhood', {
+          required: 'required', placeholder: 'Astoria', list: 'se-neighborhoods', autocomplete: 'off',
+          onChange: (e) => fillBorough(e.target),
+        }), { hint: 'Use StreetEasy\'s name; suggestions appear as you type.' }),
+        field('Borough', input('city', { required: 'required', placeholder: 'Queens', list: 'se-boroughs', autocomplete: 'off' })),
+        field('Bedrooms', el('select', { name: 'beds', class: 'ds-field' }, [
+          el('option', { value: '0' }, 'Studio'),
+          el('option', { value: '1', selected: 'selected' }, '1 bedroom'),
+          el('option', { value: '2' }, '2 bedrooms'),
+          el('option', { value: '3' }, '3 bedrooms'),
+          el('option', { value: '4' }, '4 bedrooms'),
+          el('option', { value: '5' }, '5+ bedrooms'),
+        ])),
+        field('Bathrooms', input('baths', { type: 'number', required: 'required', min: '1', max: '6', step: '0.5', value: '1', inputmode: 'decimal' })),
+      ], 'Required'),
+
+      fieldset('Details', [
+        field('Square feet', input('sqft', { inputmode: 'numeric', autocomplete: 'off', placeholder: '700' }), { hint: 'Listed square footage earns a space bonus of up to 10 points.' }),
+        field('Street address', input('address', { placeholder: '30-14 31st St', autocomplete: 'off' })),
+        field('Year built', input('yearBuilt', { type: 'number', min: '1800', max: '2035', placeholder: '1931', inputmode: 'numeric' })),
+        field('Available from', input('available', { type: 'date' })),
+        field('Utilities included', input('utilities', { placeholder: 'heat, hot water' }), { hint: 'Separate with commas.' }),
+        field('Move-in concession', input('concession', { placeholder: '1 month free' })),
+        field('Pets', el('select', { name: 'petPolicy', class: 'ds-field' }, [
+          el('option', { value: '' }, 'Not listed'),
+          el('option', { value: 'none' }, 'No pets'),
+          el('option', { value: 'cats' }, 'Cats only'),
+          el('option', { value: 'friendly' }, 'Cats and dogs'),
+        ])),
+        el('label', { class: 'flex min-h-[2.5rem] items-center gap-2 self-end text-sm text-slate-800' }, [
+          el('input', { type: 'checkbox', name: 'renovated' }), 'Recently renovated',
+        ]),
+      ], 'Optional'),
+
+      amenityGroups(),
+
+      el('details', { class: 'rounded-xl border border-slate-200 p-4' }, [
+        el('summary', { class: 'cursor-pointer text-base font-bold text-slate-900' }, ['Photos and map location', el('span', { class: 'ml-2 text-sm font-normal text-slate-600' }, 'Optional')]),
+        el('div', { class: 'mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
+          el('div', { class: 'sm:col-span-2' }, [
+            field('Photo links', el('textarea', {
+              name: 'images', rows: '3', placeholder: 'https://example.com/photos/living-room.jpg',
+              class: 'ds-field font-mono text-xs',
+            }), { hint: 'One https link per line; the first is the cover photo.' }),
+          ]),
+          field('Latitude', latInput, { hint: 'Paste "40.7679, -73.9205" into either box to fill both.' }),
+          field('Longitude', lngInput),
+        ]),
       ]),
-      field('Pet policy', el('select', {
-        name: 'petPolicy',
-        class: 'rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none',
-      }, [
-        el('option', { value: 'friendly' }, 'Pet friendly'),
-        el('option', { value: 'cats' }, 'Cats only'),
-        el('option', { value: 'none' }, 'No pets'),
-      ])),
-      el('label', { class: 'flex flex-col gap-1 sm:col-span-2' }, [
-        el('span', { class: 'text-xs font-medium text-slate-500' }, 'Photo URLs (optional, one per line; the first is the cover)'),
-        el('textarea', {
-          name: 'images', rows: '3', placeholder: 'https://example.com/photos/living-room.jpg',
-          class: 'rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-800 focus:border-emerald-500 focus:outline-none',
-        }),
-      ]),
-      el('div', { class: 'sm:col-span-2' }, [
-        el('span', { class: 'text-xs font-medium text-slate-500' }, 'Amenities'),
-        el('div', { class: 'mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3' }, AMENITIES.map((a) =>
-          el('label', { class: 'flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700' }, [
-            el('input', { type: 'checkbox', name: 'amenity', value: a.key }),
-            el('span', {}, `${a.icon} ${a.label}`),
-          ]))),
-      ]),
-      el('div', { class: 'sm:col-span-2 flex items-center gap-3' }, [
-        el('button', { type: 'submit', class: 'rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700' }, 'Save listing'),
-        el('span', { class: 'text-xs text-slate-400' }, 'Saved in your browser — nothing leaves this device.'),
+
+      el('div', { class: 'flex flex-wrap items-center gap-3' }, [
+        el('button', { type: 'submit', class: 'rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover' }, 'Save listing'),
+        el('p', { class: 'text-sm text-slate-600' }, 'Saved only in this browser. Nothing is uploaded.'),
       ]),
     ]);
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
+      const rent = parseAmount(rentInput.value);
+      rentInput.setCustomValidity(rent > 0 ? '' : 'Enter the monthly rent, e.g. 3200.');
+      if (!form.reportValidity()) return;
+
       const fd = new FormData(form);
-      const city = fd.get('city');
-      const nbhd = fd.get('neighborhood');
-      const amenities = fd.getAll('amenity');
+      const city = String(fd.get('city')).trim();
+      const nbhd = String(fd.get('neighborhood')).trim();
       const utils = String(fd.get('utilities') || '').split(',').map((s) => s.trim()).filter(Boolean);
-      // Photo URLs: http(s) only, de-duplicated, capped at 12.
+      // Photo links: http(s) only, de-duplicated, capped at 12.
       const rawImages = String(fd.get('images') || '').split(/\s+/).filter(Boolean);
-      const images = [...new Set(rawImages.map(httpUrl).filter(Boolean))].slice(0, 12);
-      const skipped = rawImages.length - rawImages.map(httpUrl).filter(Boolean).length;
+      const okImages = rawImages.map(httpUrl).filter(Boolean);
+      const images = [...new Set(okImages)].slice(0, 12);
+      const skipped = rawImages.length - okImages.length;
+      const sqft = parseAmount(fd.get('sqft'));
       const listing = {
-        id: `user-${slug(city)}-${slug(nbhd)}-${Date.now().toString(36)}`,
-        title: fd.get('title'), address: fd.get('address') || '',
-        city, citySlug: slug(city), neighborhood: nbhd, neighborhoodSlug: slug(nbhd),
-        rent: Number(fd.get('rent')), sqft: Number(fd.get('sqft')) || null,
+        id: `user-${addSlug(city)}-${addSlug(nbhd)}-${Date.now().toString(36)}`,
+        title: String(fd.get('title')).trim(), address: String(fd.get('address') || '').trim(),
+        city, citySlug: addSlug(city), neighborhood: nbhd, neighborhoodSlug: addSlug(nbhd),
+        rent, sqft: sqft > 0 ? sqft : null,
         beds: Number(fd.get('beds')), baths: Number(fd.get('baths')),
-        yearBuilt: Number(fd.get('yearBuilt')) || new Date().getFullYear(),
+        yearBuilt: Number(fd.get('yearBuilt')) || null,
         renovated: fd.get('renovated') === 'on',
         available: fd.get('available') || '',
-        petPolicy: fd.get('petPolicy') || 'none',
+        petPolicy: fd.get('petPolicy') || '',
         utilitiesIncluded: utils,
-        concession: fd.get('concession') || '',
-        amenities,
+        concession: String(fd.get('concession') || '').trim(),
+        amenities: fd.getAll('amenity'),
         images,
-        accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
       };
       // Coordinates are optional; keep them only as a valid pair.
-      const lat = parseFloat(fd.get('lat'));
-      const lng = parseFloat(fd.get('lng'));
-      if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
-        listing.lat = lat;
-        listing.lng = lng;
+      const pair = parseCoordPair(`${fd.get('lat')}, ${fd.get('lng')}`);
+      if (pair && Math.abs(pair[0]) <= 90 && Math.abs(pair[1]) <= 180) {
+        listing.lat = pair[0];
+        listing.lng = pair[1];
       }
       addUserListing(listing);
       invalidate();
-      render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.` +
-        (skipped ? ` Skipped ${skipped} photo link${skipped === 1 ? '' : 's'} that weren't http(s) URLs.` : ''));
+      render(`Saved "${listing.title}" (${money(listing.rent)}/mo).` +
+        (skipped ? ` Skipped ${skipped} photo link${skipped === 1 ? '' : 's'} that weren't http(s) links.` : ''));
     });
 
     const drafts = loadUserListings();
-    const draftPanel = el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-5' }, [
-      el('div', { class: 'flex items-center justify-between' }, [
-        el('h2', { class: 'text-lg font-bold text-slate-900' }, `Your draft listings (${drafts.length})`),
+    const draftPanel = el('section', { class: 'rounded-2xl border border-slate-200 bg-white p-5', 'aria-labelledby': 'drafts-heading' }, [
+      el('div', { class: 'flex flex-wrap items-center justify-between gap-3' }, [
+        el('h2', { class: 'text-lg font-bold text-slate-900', id: 'drafts-heading' }, `Your listings (${drafts.length})`),
         drafts.length ? el('div', { class: 'flex gap-2' }, [
           el('button', {
-            class: 'rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50',
-            onClick: () => exportJson(drafts),
+            type: 'button',
+            class: 'rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50',
+            onClick: (e) => exportJson(drafts, e.currentTarget),
           }, 'Export JSON'),
-          el('button', {
-            class: 'rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50',
-            onClick: () => { clearUserListings(); invalidate(); render('Cleared all drafts.'); },
-          }, 'Clear all'),
         ]) : null,
       ]),
       drafts.length
         ? el('ul', { class: 'mt-3 divide-y divide-slate-100' }, drafts.map((d) =>
-          el('li', { class: 'flex items-center justify-between py-2 text-sm' }, [
-            el('span', { class: 'text-slate-700' }, `${d.title} — ${money(d.rent)}/mo · ${d.neighborhood}`),
+          el('li', { class: 'flex items-center justify-between gap-3 py-2 text-sm' }, [
+            el('a', { href: `#/listing/${encodeURIComponent(d.id)}`, class: 'num text-slate-800 underline-offset-2 hover:underline' }, `${d.title} — ${money(d.rent)}/mo · ${d.neighborhood}`),
             el('button', {
-              class: 'text-xs text-rose-500 hover:underline',
-              onClick: () => { removeUserListing(d.id); invalidate(); render('Removed.'); },
+              type: 'button',
+              class: 'shrink-0 rounded-md px-2 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50',
+              'aria-label': `Remove ${d.title}`,
+              onClick: () => { removeUserListing(d.id); invalidate(); render(`Removed "${d.title}".`); },
             }, 'Remove'),
           ])))
-        : el('p', { class: 'mt-2 text-sm text-slate-500' }, 'No drafts yet. Add one above and it shows up in Browse instantly.'),
+        : el('p', { class: 'mt-2 text-sm text-slate-600' }, 'None yet. Saved listings appear here and in Browse.'),
+      // Destructive action kept apart from the frequent ones, with a confirmation.
+      drafts.length > 1
+        ? el('div', { class: 'mt-4 border-t border-slate-100 pt-4' }, [
+          el('button', {
+            type: 'button',
+            class: 'rounded-md px-2 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50',
+            onClick: () => {
+              if (!window.confirm(`Remove all ${drafts.length} listings from this browser? This can't be undone.`)) return;
+              clearUserListings(); invalidate(); render('Removed all listings.');
+            },
+          }, `Remove all ${drafts.length} listings`),
+        ])
+        : null,
     ]);
+
+    const status = message
+      ? el('div', { class: 'ds-pulse mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800', role: 'status' }, [
+        message, ' ', el('a', { href: '#/', class: 'underline' }, 'See it in Browse'),
+      ])
+      : null;
 
     const page = el('div', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
       el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, 'Add a listing'),
-      el('p', { class: 'mt-2 text-sm text-slate-600' },
-        'Enter an apartment you\'re considering to see its Deal Score against StreetEasy\'s median asking rent for its neighborhood and size. ' +
-        'Listings are stored locally; export them as JSON to commit into the data file or load into a live backend.'),
-      message ? el('div', { class: 'mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700' }, [
-        message, ' ', el('a', { href: '#/', class: 'underline' }, 'Go to Browse →'),
-      ]) : null,
-      el('div', { class: 'mt-5 rounded-2xl border border-slate-200 bg-white p-5' }, [form, marketDatalists()]),
+      el('p', { class: 'mt-2 max-w-prose text-sm text-slate-700' },
+        'Enter an apartment you\'re considering. Its rent is compared with StreetEasy\'s median asking rent for the neighborhood and size, and it gets a Deal Score from 0 to 100.'),
+      status,
+      el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6' }, [form, marketDatalists()]),
       el('div', { class: 'mt-6' }, [draftPanel]),
     ]);
     mount(root, page);
   }
 
-  function exportJson(drafts) {
+  // Native <dialog>: traps focus, closes with Esc, and focus returns to the
+  // button that opened it.
+  function exportJson(drafts, trigger) {
+    lastTrigger = trigger;
     const json = JSON.stringify(drafts, null, 2);
-    const overlay = el('div', { class: 'fixed inset-0 z-50 grid place-items-center bg-black/40 p-4' }, [
-      el('div', { class: 'w-full max-w-2xl rounded-2xl bg-white p-5' }, [
-        el('div', { class: 'flex items-center justify-between' }, [
-          el('h3', { class: 'text-lg font-bold text-slate-900' }, 'Export listings JSON'),
-          el('button', { class: 'text-slate-400 hover:text-slate-700', onClick: () => overlay.remove() }, '✕'),
+    const copyStatus = el('p', { class: 'text-sm text-slate-700', role: 'status' });
+    const dialog = el('dialog', { class: 'ds-dialog', 'aria-labelledby': 'export-title' }, [
+      el('div', { class: 'p-5' }, [
+        el('div', { class: 'flex items-center justify-between gap-3' }, [
+          el('h2', { class: 'text-lg font-bold text-slate-900', id: 'export-title' }, 'Export listings as JSON'),
+          el('button', {
+            type: 'button', 'aria-label': 'Close',
+            class: 'grid h-10 w-10 place-items-center rounded-lg text-slate-700 hover:bg-slate-100',
+            onClick: () => dialog.close(),
+          }, [icon('x', { size: 20 })]),
         ]),
-        el('p', { class: 'mt-1 text-sm text-slate-600' }, 'Paste these objects into the SEED_LISTINGS array in assets/js/data/listings.js, or load them into your backend.'),
-        el('textarea', { class: 'mt-3 h-64 w-full rounded-lg border border-slate-300 p-3 font-mono text-xs', readonly: 'readonly' }, json),
-        el('button', {
-          class: 'mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white',
-          onClick: (e) => { navigator.clipboard?.writeText(json); e.target.textContent = 'Copied!'; },
-        }, 'Copy to clipboard'),
+        el('p', { class: 'mt-1 text-sm text-slate-700' }, 'Paste these objects into the SEED_LISTINGS array in assets/js/data/listings.js, or load them into a backend.'),
+        el('textarea', { class: 'ds-field mt-3 h-64 font-mono text-xs', readonly: 'readonly', 'aria-label': 'Listings JSON' }, json),
+        el('div', { class: 'mt-3 flex flex-wrap items-center gap-3' }, [
+          el('button', {
+            type: 'button',
+            class: 'rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover',
+            onClick: async () => {
+              try {
+                await navigator.clipboard.writeText(json);
+                copyStatus.textContent = 'Copied to clipboard.';
+                copyStatus.classList.remove('ds-pulse');
+                void copyStatus.offsetWidth;
+                copyStatus.classList.add('ds-pulse');
+              } catch {
+                copyStatus.textContent = 'Couldn\'t copy automatically. Select the text above and copy it.';
+              }
+            },
+          }, 'Copy to clipboard'),
+          copyStatus,
+        ]),
       ]),
     ]);
-    document.body.appendChild(overlay);
+    dialog.addEventListener('close', () => {
+      dialog.remove();
+      if (lastTrigger && lastTrigger.isConnected) lastTrigger.focus();
+    });
+    document.body.appendChild(dialog);
+    dialog.showModal();
   }
 
   render(null);
 }
 
+/* ===== assets/js/pages/legal.js ===== */
+// Privacy and Terms pages. Written from what the code actually does (see the
+// inventory in docs/DESIGN_AUDIT.md). DRAFTS: the owner and a qualified lawyer
+// must review them, and fill every [[TODO]], before they're relied on.
+
+
+
+const POLICY_VERSION = '0.1 (draft)';
+
+// A visible, searchable placeholder for details only the owner can supply.
+function legalTodo(text) {
+  return el('mark', { class: 'rounded bg-amber-100 px-1 text-amber-900' }, `[[TODO: ${text}]]`);
+}
+
+function legalDraftBanner() {
+  return el('p', { class: 'mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800', role: 'note' },
+    'DRAFT: requires review by a qualified lawyer before publishing.');
+}
+
+function legalSection(title, children) {
+  return el('section', { class: 'mt-8' }, [
+    el('h2', { class: 'text-lg font-bold text-slate-900' }, title),
+    ...children,
+  ]);
+}
+
+const legalP = (children) => el('p', { class: 'mt-2 text-sm leading-6 text-slate-700' }, children);
+const legalList = (items) => el('ul', { class: 'mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700' }, items.map((i) => el('li', {}, i)));
+const legalExt = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-accent underline' }, text);
+
+function legalHeader(title) {
+  return [
+    el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, title),
+    el('p', { class: 'mt-2 text-sm text-slate-600' }, ['Version ', POLICY_VERSION, ' · Effective ', legalTodo('effective date')]),
+    legalDraftBanner(),
+  ];
+}
+
+function legalStorageTable() {
+  const th = (t) => el('th', { scope: 'col', class: 'px-3 py-2 text-left font-semibold text-slate-900' }, t);
+  const td = (t) => el('td', { class: 'px-3 py-2 align-top text-slate-700' }, t);
+  return el('div', { class: 'mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white' }, [
+    el('table', { class: 'w-full text-sm' }, [
+      el('caption', { class: 'sr-only' }, 'Browser storage used by DealScore'),
+      el('thead', { class: 'border-b border-slate-200' }, el('tr', {}, [th('Name'), th('Type'), th('Set by'), th('Purpose'), th('Category'), th('Duration')])),
+      el('tbody', {}, el('tr', {}, [
+        td(el('code', { class: 'font-mono text-xs' }, USER_LISTINGS_KEY)),
+        td('localStorage'),
+        td('DealScore, in your browser'),
+        td('Keeps the listings you add on the Add listing page.'),
+        td('Necessary for the feature you use'),
+        td('Until you remove the listings or clear site data'),
+      ])),
+    ]),
+  ]);
+}
+
+function privacyPage(root) {
+  mount(root, el('article', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
+    ...legalHeader('Privacy policy'),
+
+    legalSection('Who runs DealScore', [
+      legalP(['DealScore is run by ', legalTodo('owner or legal entity name'), '. Contact: ', legalTodo('contact email'), '.']),
+    ]),
+
+    legalSection('What DealScore collects', [
+      legalP('Nothing is sent to us. DealScore has no accounts, no sign-up, no analytics, no advertising, and sets no cookies.'),
+      legalP('Listings you add on the Add listing page are saved only in your own browser\'s storage (see the table below). They are not uploaded anywhere. You can remove them one at a time or all at once on the Add listing page, or by clearing this site\'s data in your browser.'),
+    ]),
+
+    legalSection('Services your browser contacts', [
+      legalP('Like any website, loading DealScore makes your browser contact a few services. Each receives your IP address and standard browser information (such as user agent and the page that made the request) under its own privacy policy:'),
+      legalList([
+        ['Website hosting: ', legalTodo('confirm host, e.g. GitHub Pages'), '. ', legalExt('https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement', 'GitHub\'s privacy statement'), ' describes what it logs for GitHub Pages sites.'],
+        ['Tailwind CSS (cdn.tailwindcss.com), on every page, to style the site.'],
+        ['OpenStreetMap tile servers (tile.openstreetmap.org), only when a map is shown. ', legalExt('https://osmfoundation.org/wiki/Privacy_Policy', 'OSMF privacy policy'), '.'],
+        ['Photo hosts: if you add photo links to a listing, your browser loads those images from the sites in the links.'],
+      ]),
+      legalP('The fonts and map library are hosted with DealScore itself, so no font or library CDN is contacted. StreetEasy, RentCafe and other linked sites are contacted only if you click a link to them.'),
+    ]),
+
+    legalSection('Cookies and browser storage', [
+      legalP('DealScore sets no cookies. It uses one browser-storage entry:'),
+      legalStorageTable(),
+      legalP('Because nothing optional is loaded, there is no cookie banner. If analytics or similar tools are ever added, they will load only after you agree.'),
+    ]),
+
+    legalSection('Your choices and rights', [
+      legalP('Since DealScore holds no personal data about you, there is nothing for us to access, correct, export or delete on our side. Your saved listings are under your control in your browser.'),
+      legalP(['Depending on where you live (for example under the GDPR or the CCPA), you may have additional rights: ', legalTodo('lawyer to confirm which apply and the legal basis, if any'), '. Questions about this policy: ', legalTodo('contact email'), '.']),
+    ]),
+
+    legalSection('Children', [
+      legalP(['DealScore is a tool for adults looking for apartments and is not directed at children. ', legalTodo('owner to confirm the site is not aimed at or likely to attract children under 13 / under 16 in the EU'), '.']),
+    ]),
+
+    legalSection('Changes to this policy', [
+      legalP('If this policy changes, the new version and its effective date will be posted on this page.'),
+    ]),
+  ]));
+}
+
+function termsPage(root) {
+  mount(root, el('article', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
+    ...legalHeader('Terms of use'),
+
+    legalSection('What DealScore is', [
+      legalP(['DealScore is a free tool, run by ', legalTodo('owner or legal entity name'), ', that gives an apartment a Deal Score from 0 to 100. The score compares the rent you enter with StreetEasy\'s published median asking rent for the neighborhood and bedroom count, and adds points for amenities, laundry, condition and size. See ', el('a', { href: '#/methodology', class: 'text-accent underline' }, 'How scoring works'), '.']),
+    ]),
+
+    legalSection('Not advice', [
+      legalP('The Deal Score is an automated estimate for comparison only. It is not an appraisal and not financial, legal or real-estate advice. Median asking rents describe what landlords ask, not what tenants sign for, and every apartment differs. Check the details with the landlord or broker before you decide.'),
+    ]),
+
+    legalSection('Data sources', [
+      legalList([
+        ['Market rents: ', legalExt('https://streeteasy.com/blog/data-dashboard', 'StreetEasy Data Dashboard'), '. DealScore is not affiliated with, endorsed by or sponsored by StreetEasy or Zillow Group.'],
+        ['Typical apartment sizes (space bonus): rounded from RentCafe\'s published NYC averages.'],
+        ['Map data: © OpenStreetMap contributors.'],
+      ]),
+      legalP('These sources may be incomplete, out of date or wrong, and DealScore does not guarantee the accuracy of any figure or score.'),
+    ]),
+
+    legalSection('Listings you add', [
+      legalP('Listings you enter are stored only in your browser. You are responsible for what you enter, including having the right to use any photo links you add.'),
+    ]),
+
+    legalSection('Acceptable use', [
+      legalP('Don\'t use DealScore to break the law, to infringe others\' rights, or to interfere with the site or the services it relies on.'),
+    ]),
+
+    legalSection('Disclaimers and liability', [
+      legalP(['DealScore is provided "as is", without warranties of any kind. ', legalTodo('lawyer to supply disclaimer and limitation-of-liability wording for the governing jurisdiction'), '.']),
+    ]),
+
+    legalSection('Governing law', [
+      legalP([legalTodo('governing law and jurisdiction'), '.']),
+    ]),
+
+    legalSection('Changes and contact', [
+      legalP(['If these terms change, the new version and its effective date will be posted on this page. Questions: ', legalTodo('contact email'), '.']),
+    ]),
+  ]));
+}
+
 /* ===== assets/js/main.js ===== */
-// App bootstrap: wire the router to pages and keep the header in sync.
+// App bootstrap: wire the router to pages, keep the header in sync, and handle
+// the things every page needs — document title, focus after navigation,
+// loading and error states, and a short crossfade between pages.
+
 
 
 
@@ -1808,25 +2104,78 @@ function addPage(root) {
 
 const headerRoot = document.getElementById('app-header');
 const appRoot = document.getElementById('app');
+const DEFAULT_TITLE = 'DealScore — NYC apartments scored by value';
+const prefersReducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let firstRender = true;
 
-function withChrome(fn) {
+function loadingView() {
+  return el('div', { class: 'mx-auto max-w-3xl px-4 py-16 text-center text-sm text-slate-600', role: 'status' }, 'Loading…');
+}
+
+function errorView() {
+  return el('div', { class: 'mx-auto max-w-3xl px-4 py-16 text-center', role: 'alert' }, [
+    el('p', { class: 'font-semibold text-slate-900' }, 'This page didn\'t load.'),
+    el('p', { class: 'mt-1 text-sm text-slate-600' }, 'Something went wrong while preparing it. Try again, or go back to Browse.'),
+    el('div', { class: 'mt-4 flex justify-center gap-3' }, [
+      el('button', { type: 'button', class: 'rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover', onClick: () => refresh() }, 'Try again'),
+      el('a', { href: '#/', class: 'rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50' }, 'Go to Browse'),
+    ]),
+  ]);
+}
+
+// Render a page with a loading state (only if it takes over 300ms) and an
+// error state with a retry.
+async function renderWithStates(render) {
+  const timer = setTimeout(() => mount(appRoot, loadingView()), 300);
+  try {
+    await render();
+  } catch (err) {
+    console.error(err);
+    mount(appRoot, errorView());
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// `title` is the page's default document title; pages can refine it.
+function page(title, fn) {
   return (ctx) => {
-    renderHeader(headerRoot);
-    return fn(appRoot, ctx);
+    const run = () => {
+      renderHeader(headerRoot);
+      document.title = title ? `${title} — DealScore` : DEFAULT_TITLE;
+      return renderWithStates(() => fn(appRoot, ctx));
+    };
+    const initial = firstRender;
+    firstRender = false;
+    // Crossfade between pages where supported (View Transitions API).
+    const done = !initial && document.startViewTransition && !prefersReducedMotion()
+      ? document.startViewTransition(run).updateCallbackDone
+      : run();
+    // After navigating, move focus to the new content for keyboard and
+    // screen-reader users. Not on first load, so the skip link stays first.
+    Promise.resolve(done).then(() => { if (!initial) appRoot.focus({ preventScroll: true }); }, () => {});
   };
 }
 
-route('#/', withChrome(homePage));
-route('#/listing/:id', withChrome(listingPage));
-route('#/methodology', withChrome(() => methodologyPage(appRoot)));
-route('#/add', withChrome(() => addPage(appRoot)));
+route('#/', page('', homePage));
+route('#/listing/:id', page('Listing', listingPage));
+route('#/methodology', page('How scoring works', () => methodologyPage(appRoot)));
+route('#/add', page('Add a listing', () => addPage(appRoot)));
+route('#/privacy', page('Privacy', () => privacyPage(appRoot)));
+route('#/terms', page('Terms', () => termsPage(appRoot)));
 
-setNotFound(() => {
-  renderHeader(headerRoot);
+setNotFound(page('Page not found', () => {
   mount(appRoot, el('div', { class: 'mx-auto max-w-3xl px-4 py-16 text-center' }, [
-    el('p', { class: 'text-slate-500' }, 'Page not found.'),
-    el('a', { href: '#/', class: 'mt-3 inline-block text-emerald-600 underline' }, 'Back to browse'),
+    el('h1', { class: 'text-xl font-bold text-slate-900' }, 'Page not found'),
+    el('a', { href: '#/', class: 'mt-3 inline-block py-1 text-accent underline' }, 'Go to Browse'),
   ]));
+}));
+
+// The app routes on the URL hash, so the skip link moves focus instead of
+// navigating to #app (which the router would treat as an unknown page).
+document.querySelector('[data-skip-link]')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  appRoot.focus();
 });
 
 startRouter();
