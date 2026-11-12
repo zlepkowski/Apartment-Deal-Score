@@ -17,7 +17,7 @@ export function renderHeader(root) {
       el('a', { href: '#/', class: 'flex items-center gap-2' }, [
         el('span', { class: 'grid h-8 w-8 place-items-center rounded-lg bg-emerald-500 text-white font-black' }, 'D'),
         el('span', { class: 'text-lg font-extrabold tracking-tight text-slate-900' }, 'DealScore'),
-        el('span', { class: 'hidden sm:inline text-sm text-slate-400' }, 'Apartments'),
+        el('span', { class: 'hidden sm:inline text-sm text-slate-400' }, 'NYC Apartments'),
       ]),
       el('nav', { class: 'flex items-center gap-1' }, [
         link('#/', 'Browse'),

@@ -107,7 +107,7 @@ export async function homePage(root, ctx) {
 
     const page = el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
       el('div', { class: 'mb-5' }, [
-        el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments'),
+        el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
         el('p', { class: 'text-sm text-slate-500' },
           'Every listing is scored against comparable units nearby — sorted best deal first.'),
       ]),

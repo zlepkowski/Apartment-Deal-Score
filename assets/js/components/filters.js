@@ -19,7 +19,7 @@ function select(label, value, options, onChange) {
 export function filterBar(state, derived, onChange) {
   const set = (patch) => onChange({ ...state, ...patch });
 
-  const cityOpts = [{ value: '', label: 'All cities' },
+  const cityOpts = [{ value: '', label: 'All boroughs' },
     ...derived.cities.map((c) => ({ value: c.slug, label: c.name }))];
 
   const nbhdOpts = [{ value: '', label: 'All neighborhoods' },
@@ -40,7 +40,7 @@ export function filterBar(state, derived, onChange) {
 
   return el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-4' }, [
     el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6' }, [
-      select('City', state.city, cityOpts, (v) => set({ city: v, neighborhood: '' })),
+      select('Borough', state.city, cityOpts, (v) => set({ city: v, neighborhood: '' })),
       select('Neighborhood', state.neighborhood, nbhdOpts, (v) => set({ neighborhood: v })),
       select('Bedrooms', state.beds, bedOpts, (v) => set({ beds: v })),
       el('label', { class: 'flex flex-col gap-1 text-xs font-medium text-slate-500' }, [

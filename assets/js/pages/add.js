@@ -32,17 +32,17 @@ function input(name, attrs = {}) {
 export function addPage(root) {
   function render(message) {
     const form = el('form', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
-      field('Title', input('title', { required: 'required', placeholder: 'Sunny Logan Square 1BR' })),
-      field('Street address', input('address', { placeholder: '2418 N Sawyer Ave' })),
-      field('City', input('city', { required: 'required', placeholder: 'Chicago' })),
-      field('Neighborhood', input('neighborhood', { required: 'required', placeholder: 'Logan Square' })),
+      field('Title', input('title', { required: 'required', placeholder: 'Sunny Astoria 1BR' })),
+      field('Street address', input('address', { placeholder: '30-14 31st St' })),
+      field('Borough / city', input('city', { required: 'required', placeholder: 'Queens' })),
+      field('Neighborhood', input('neighborhood', { required: 'required', placeholder: 'Astoria' })),
       field('Monthly rent ($)', input('rent', { type: 'number', required: 'required', min: '0', step: '25' })),
       field('Square feet', input('sqft', { type: 'number', required: 'required', min: '0', step: '10' })),
       field('Bedrooms (0 = studio)', input('beds', { type: 'number', required: 'required', min: '0', max: '6', value: '1' })),
       field('Bathrooms', input('baths', { type: 'number', required: 'required', min: '1', max: '6', step: '0.5', value: '1' })),
       field('Year built', input('yearBuilt', { type: 'number', min: '1850', max: '2030', placeholder: '2018' })),
       field('Available date', input('available', { type: 'date' })),
-      field('Utilities included (comma-separated)', input('utilities', { placeholder: 'heat, water' })),
+      field('Utilities included (comma-separated)', input('utilities', { placeholder: 'heat, hot water' })),
       field('Move-in concession', input('concession', { placeholder: '1 month free' })),
       el('label', { class: 'flex items-center gap-2 text-sm text-slate-700' }, [
         el('input', { type: 'checkbox', name: 'renovated' }), 'Recently renovated',
