@@ -1,7 +1,7 @@
 // A single listing card for the browse grid.
 
 import { el } from '../util/dom.js';
-import { money, beds, ppsfText } from '../util/format.js';
+import { money, beds, ppsfText, photoUrls } from '../util/format.js';
 import { scoreBadge } from './scoreBadge.js';
 import { amenity } from '../data/amenities.js';
 
@@ -17,6 +17,8 @@ const ACCENT = {
 export function listingCard(scored) {
   const accent = ACCENT[scored.accent] || ACCENT.sky;
   const topAmenities = (scored.amenities || []).slice(0, 4).map((k) => amenity(k));
+  const photos = photoUrls(scored);
+  const cover = photos[0];
 
   // Savings backed by few comparable listings are shown muted and flagged.
   const savings = scored.monthlySavings;
@@ -35,11 +37,23 @@ export function listingCard(scored) {
     class: 'group block overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:shadow-lg hover:-translate-y-0.5',
   }, [
     el('div', { class: `relative h-36 bg-gradient-to-br ${accent}` }, [
+      // Cover photo over the colored placeholder; if it fails to load, the
+      // placeholder shows through.
+      cover ? el('img', {
+        src: cover, alt: '', loading: 'lazy',
+        class: 'absolute inset-0 h-full w-full object-cover',
+        onError: (e) => e.target.remove(),
+      }) : null,
       el('div', { class: 'absolute left-3 top-3' }, [scoreBadge(scored, 'sm')]),
       scored._source === 'user'
         ? el('div', { class: 'absolute right-3 top-3 rounded-full bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white' }, 'Draft')
         : null,
-      el('div', { class: 'absolute bottom-3 left-3 text-sm font-semibold text-slate-700/70' }, scored.neighborhood),
+      cover
+        ? el('div', { class: 'absolute bottom-3 left-3 rounded-md bg-white/85 px-2 py-0.5 text-xs font-semibold text-slate-700' }, scored.neighborhood)
+        : el('div', { class: 'absolute bottom-3 left-3 text-sm font-semibold text-slate-700/70' }, scored.neighborhood),
+      photos.length > 1
+        ? el('div', { class: 'absolute bottom-3 right-3 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white' }, `📷 ${photos.length}`)
+        : null,
     ]),
     el('div', { class: 'p-4' }, [
       el('div', { class: 'flex items-baseline justify-between gap-2' }, [

@@ -7,7 +7,7 @@ import { el, mount } from '../util/dom.js';
 import { AMENITIES } from '../data/amenities.js';
 import { addUserListing, loadUserListings, removeUserListing, clearUserListings } from '../util/storage.js';
 import { invalidate } from '../data/adapter.js';
-import { money } from '../util/format.js';
+import { money, httpUrl } from '../util/format.js';
 
 function slug(s) {
   return String(s).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -57,6 +57,13 @@ export function addPage(root) {
         el('option', { value: 'cats' }, 'Cats only'),
         el('option', { value: 'none' }, 'No pets'),
       ])),
+      el('label', { class: 'flex flex-col gap-1 sm:col-span-2' }, [
+        el('span', { class: 'text-xs font-medium text-slate-500' }, 'Photo URLs (optional, one per line; the first is the cover)'),
+        el('textarea', {
+          name: 'images', rows: '3', placeholder: 'https://example.com/photos/living-room.jpg',
+          class: 'rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-800 focus:border-emerald-500 focus:outline-none',
+        }),
+      ]),
       el('div', { class: 'sm:col-span-2' }, [
         el('span', { class: 'text-xs font-medium text-slate-500' }, 'Amenities'),
         el('div', { class: 'mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3' }, AMENITIES.map((a) =>
@@ -78,6 +85,10 @@ export function addPage(root) {
       const nbhd = fd.get('neighborhood');
       const amenities = fd.getAll('amenity');
       const utils = String(fd.get('utilities') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      // Photo URLs: http(s) only, de-duplicated, capped at 12.
+      const rawImages = String(fd.get('images') || '').split(/\s+/).filter(Boolean);
+      const images = [...new Set(rawImages.map(httpUrl).filter(Boolean))].slice(0, 12);
+      const skipped = rawImages.length - rawImages.map(httpUrl).filter(Boolean).length;
       const listing = {
         id: `user-${slug(city)}-${slug(nbhd)}-${Date.now().toString(36)}`,
         title: fd.get('title'), address: fd.get('address') || '',
@@ -91,6 +102,7 @@ export function addPage(root) {
         utilitiesIncluded: utils,
         concession: fd.get('concession') || '',
         amenities,
+        images,
         accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
       };
       // Coordinates are optional; keep them only as a valid pair.
@@ -102,7 +114,8 @@ export function addPage(root) {
       }
       addUserListing(listing);
       invalidate();
-      render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.`);
+      render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.` +
+        (skipped ? ` Skipped ${skipped} photo link${skipped === 1 ? '' : 's'} that weren't http(s) URLs.` : ''));
     });
 
     const drafts = loadUserListings();

@@ -65,6 +65,12 @@ function httpUrl(u) {
   }
 }
 
+// A listing's usable photo URLs (http/https only), in order. The first one is
+// the cover.
+function photoUrls(listing) {
+  return (Array.isArray(listing.images) ? listing.images : []).map(httpUrl).filter(Boolean);
+}
+
 /* ===== assets/js/util/stats.js ===== */
 // Tiny statistics helpers used by the scoring engine.
 
@@ -1335,7 +1341,7 @@ function pinIcon(s, { active, muted }) {
 }
 
 function popup(s) {
-  const cover = (s.images || [])[0];
+  const cover = photoUrls(s)[0];
   return el('a', { href: `#/listing/${encodeURIComponent(s.id)}`, class: 'ds-popup block w-52' }, [
     cover ? el('img', {
       src: cover, alt: '', loading: 'lazy', class: 'mb-2 h-24 w-full rounded-md object-cover',
@@ -1413,6 +1419,92 @@ function listingsMap({ heightClass = 'h-[28rem]' } = {}) {
   return { node, setListings };
 }
 
+/* ===== assets/js/components/gallery.js ===== */
+// Photo gallery for the listing page: a CSS scroll-snap carousel, so it swipes
+// natively on touch screens, plus prev/next buttons, arrow keys, a counter,
+// and dots. A photo that fails to load is replaced by a placeholder so the
+// numbering stays stable.
+
+
+
+function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
+  const urls = photoUrls(listing);
+  const n = urls.length;
+  let index = 0;
+
+  const slides = urls.map((src, i) => el('div', { class: 'relative h-full w-full shrink-0 snap-center bg-slate-200' }, [
+    el('img', {
+      src,
+      alt: `${listing.title} — photo ${i + 1} of ${n}`,
+      loading: i === 0 ? 'eager' : 'lazy',
+      class: 'h-full w-full object-cover',
+      onError: (e) => e.target.replaceWith(
+        el('div', { class: 'grid h-full w-full place-items-center text-sm text-slate-500' }, 'Photo unavailable')),
+    }),
+  ]));
+
+  const track = el('div', {
+    class: 'ds-gallery-track flex h-full snap-x snap-mandatory overflow-x-auto',
+    tabindex: '0',
+    role: 'region',
+    'aria-roledescription': 'carousel',
+    'aria-label': `Photos of ${listing.title}`,
+  }, slides);
+
+  const counter = el('div', { class: 'absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-medium text-white tabular-nums' });
+  const dots = urls.map((_, i) => el('button', {
+    type: 'button',
+    'aria-label': `Show photo ${i + 1}`,
+    class: 'h-2 w-2 rounded-full bg-white/60 transition',
+    onClick: () => go(i),
+  }));
+
+  const arrow = (dir, label, glyph) => el('button', {
+    type: 'button',
+    'aria-label': label,
+    class: `absolute top-1/2 ${dir < 0 ? 'left-3' : 'right-3'} grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-lg font-bold text-slate-800 shadow hover:bg-white disabled:opacity-0`,
+    onClick: () => go(index + dir),
+  }, glyph);
+  const prev = arrow(-1, 'Previous photo', '‹');
+  const next = arrow(1, 'Next photo', '›');
+
+  function sync() {
+    counter.textContent = `${index + 1} / ${n}`;
+    dots.forEach((d, i) => { d.className = `h-2 w-2 rounded-full transition ${i === index ? 'bg-white' : 'bg-white/60'}`; });
+    prev.disabled = index === 0;
+    next.disabled = index === n - 1;
+  }
+
+  function go(i) {
+    const target = Math.max(0, Math.min(n - 1, i));
+    track.scrollTo({ left: target * track.clientWidth, behavior: 'smooth' });
+  }
+
+  // The scroll position is the source of truth (swipes and buttons both land here).
+  track.addEventListener('scroll', () => {
+    const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    if (i !== index) {
+      index = i;
+      sync();
+    }
+  }, { passive: true });
+
+  track.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); go(index - 1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); go(index + 1); }
+  });
+
+  sync();
+
+  return el('div', { class: `relative overflow-hidden rounded-2xl bg-slate-200 ${heightClass}` }, [
+    track,
+    n > 1 ? prev : null,
+    n > 1 ? next : null,
+    n > 1 ? counter : null,
+    n > 1 ? el('div', { class: 'absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/30 px-2 py-1.5' }, dots) : null,
+  ]);
+}
+
 /* ===== assets/js/components/header.js ===== */
 // Top navigation bar, rendered once into #app-header.
 
@@ -1469,6 +1561,8 @@ const ACCENT = {
 function listingCard(scored) {
   const accent = ACCENT[scored.accent] || ACCENT.sky;
   const topAmenities = (scored.amenities || []).slice(0, 4).map((k) => amenity(k));
+  const photos = photoUrls(scored);
+  const cover = photos[0];
 
   // Savings backed by few comparable listings are shown muted and flagged.
   const savings = scored.monthlySavings;
@@ -1487,11 +1581,23 @@ function listingCard(scored) {
     class: 'group block overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:shadow-lg hover:-translate-y-0.5',
   }, [
     el('div', { class: `relative h-36 bg-gradient-to-br ${accent}` }, [
+      // Cover photo over the colored placeholder; if it fails to load, the
+      // placeholder shows through.
+      cover ? el('img', {
+        src: cover, alt: '', loading: 'lazy',
+        class: 'absolute inset-0 h-full w-full object-cover',
+        onError: (e) => e.target.remove(),
+      }) : null,
       el('div', { class: 'absolute left-3 top-3' }, [scoreBadge(scored, 'sm')]),
       scored._source === 'user'
         ? el('div', { class: 'absolute right-3 top-3 rounded-full bg-slate-900/80 px-2 py-0.5 text-xs font-medium text-white' }, 'Draft')
         : null,
-      el('div', { class: 'absolute bottom-3 left-3 text-sm font-semibold text-slate-700/70' }, scored.neighborhood),
+      cover
+        ? el('div', { class: 'absolute bottom-3 left-3 rounded-md bg-white/85 px-2 py-0.5 text-xs font-semibold text-slate-700' }, scored.neighborhood)
+        : el('div', { class: 'absolute bottom-3 left-3 text-sm font-semibold text-slate-700/70' }, scored.neighborhood),
+      photos.length > 1
+        ? el('div', { class: 'absolute bottom-3 right-3 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium text-white' }, `📷 ${photos.length}`)
+        : null,
     ]),
     el('div', { class: 'p-4' }, [
       el('div', { class: 'flex items-baseline justify-between gap-2' }, [
@@ -1773,6 +1879,7 @@ async function homePage(root, ctx) {
 
 
 
+
 const HERO_ACCENT = {
   rose: 'from-rose-300 to-rose-100', amber: 'from-amber-300 to-amber-100',
   sky: 'from-sky-300 to-sky-100', emerald: 'from-emerald-300 to-emerald-100',
@@ -1889,10 +1996,13 @@ async function listingPage(root, ctx) {
 
   const page = el('div', { class: 'mx-auto max-w-5xl px-4 py-6' }, [
     el('a', { href: '#/', class: 'mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800' }, '← Back to results'),
-    el('div', { class: `relative mb-5 h-56 overflow-hidden rounded-2xl bg-gradient-to-br ${accent}` }, [
-      el('div', { class: 'absolute bottom-4 left-4 rounded-lg bg-white/70 px-3 py-1 text-sm font-semibold text-slate-700 backdrop-blur' },
-        `${s.neighborhood}, ${s.city}`),
-    ]),
+    // Photos when the listing has them; otherwise the colored placeholder.
+    photoUrls(s).length
+      ? el('div', { class: 'mb-5' }, [photoGallery(s)])
+      : el('div', { class: `relative mb-5 h-56 overflow-hidden rounded-2xl bg-gradient-to-br ${accent}` }, [
+        el('div', { class: 'absolute bottom-4 left-4 rounded-lg bg-white/70 px-3 py-1 text-sm font-semibold text-slate-700 backdrop-blur' },
+          `${s.neighborhood}, ${s.city}`),
+      ]),
 
     el('div', { class: 'grid grid-cols-1 gap-6 lg:grid-cols-3' }, [
       // Main column
@@ -2104,6 +2214,13 @@ function addPage(root) {
         el('option', { value: 'cats' }, 'Cats only'),
         el('option', { value: 'none' }, 'No pets'),
       ])),
+      el('label', { class: 'flex flex-col gap-1 sm:col-span-2' }, [
+        el('span', { class: 'text-xs font-medium text-slate-500' }, 'Photo URLs (optional, one per line; the first is the cover)'),
+        el('textarea', {
+          name: 'images', rows: '3', placeholder: 'https://example.com/photos/living-room.jpg',
+          class: 'rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs text-slate-800 focus:border-emerald-500 focus:outline-none',
+        }),
+      ]),
       el('div', { class: 'sm:col-span-2' }, [
         el('span', { class: 'text-xs font-medium text-slate-500' }, 'Amenities'),
         el('div', { class: 'mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3' }, AMENITIES.map((a) =>
@@ -2125,6 +2242,10 @@ function addPage(root) {
       const nbhd = fd.get('neighborhood');
       const amenities = fd.getAll('amenity');
       const utils = String(fd.get('utilities') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      // Photo URLs: http(s) only, de-duplicated, capped at 12.
+      const rawImages = String(fd.get('images') || '').split(/\s+/).filter(Boolean);
+      const images = [...new Set(rawImages.map(httpUrl).filter(Boolean))].slice(0, 12);
+      const skipped = rawImages.length - rawImages.map(httpUrl).filter(Boolean).length;
       const listing = {
         id: `user-${slug(city)}-${slug(nbhd)}-${Date.now().toString(36)}`,
         title: fd.get('title'), address: fd.get('address') || '',
@@ -2138,6 +2259,7 @@ function addPage(root) {
         utilitiesIncluded: utils,
         concession: fd.get('concession') || '',
         amenities,
+        images,
         accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
       };
       // Coordinates are optional; keep them only as a valid pair.
@@ -2149,7 +2271,8 @@ function addPage(root) {
       }
       addUserListing(listing);
       invalidate();
-      render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.`);
+      render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.` +
+        (skipped ? ` Skipped ${skipped} photo link${skipped === 1 ? '' : 's'} that weren't http(s) URLs.` : ''));
     });
 
     const drafts = loadUserListings();

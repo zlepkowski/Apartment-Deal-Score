@@ -7,7 +7,7 @@
 // Pins are Deal Score pills colored by grade (styles in assets/css/styles.css).
 
 import { el } from '../util/dom.js';
-import { money, beds } from '../util/format.js';
+import { money, beds, photoUrls } from '../util/format.js';
 
 // Swap the tile source here. OSM's standard tiles are fine for light traffic
 // and require the attribution below; for a high-traffic site use a hosted tile
@@ -46,7 +46,7 @@ function pinIcon(s, { active, muted }) {
 }
 
 function popup(s) {
-  const cover = (s.images || [])[0];
+  const cover = photoUrls(s)[0];
   return el('a', { href: `#/listing/${encodeURIComponent(s.id)}`, class: 'ds-popup block w-52' }, [
     cover ? el('img', {
       src: cover, alt: '', loading: 'lazy', class: 'mb-2 h-24 w-full rounded-md object-cover',

@@ -60,3 +60,9 @@ export function httpUrl(u) {
     return null;
   }
 }
+
+// A listing's usable photo URLs (http/https only), in order. The first one is
+// the cover.
+export function photoUrls(listing) {
+  return (Array.isArray(listing.images) ? listing.images : []).map(httpUrl).filter(Boolean);
+}

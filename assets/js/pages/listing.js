@@ -2,11 +2,12 @@
 // breakdown of how its Deal Score was computed.
 
 import { el, mount } from '../util/dom.js';
-import { money, bedsLong, ppsfText, titleize, httpUrl } from '../util/format.js';
+import { money, bedsLong, ppsfText, titleize, httpUrl, photoUrls } from '../util/format.js';
 import { getListings } from '../data/adapter.js';
 import { scoreAll, bedLabel } from '../core/score.js';
 import { scoreBadge, toneOf } from '../components/scoreBadge.js';
 import { listingsMap, hasLocation } from '../components/map.js';
+import { photoGallery } from '../components/gallery.js';
 import { amenity } from '../data/amenities.js';
 
 const HERO_ACCENT = {
@@ -125,10 +126,13 @@ export async function listingPage(root, ctx) {
 
   const page = el('div', { class: 'mx-auto max-w-5xl px-4 py-6' }, [
     el('a', { href: '#/', class: 'mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800' }, '← Back to results'),
-    el('div', { class: `relative mb-5 h-56 overflow-hidden rounded-2xl bg-gradient-to-br ${accent}` }, [
-      el('div', { class: 'absolute bottom-4 left-4 rounded-lg bg-white/70 px-3 py-1 text-sm font-semibold text-slate-700 backdrop-blur' },
-        `${s.neighborhood}, ${s.city}`),
-    ]),
+    // Photos when the listing has them; otherwise the colored placeholder.
+    photoUrls(s).length
+      ? el('div', { class: 'mb-5' }, [photoGallery(s)])
+      : el('div', { class: `relative mb-5 h-56 overflow-hidden rounded-2xl bg-gradient-to-br ${accent}` }, [
+        el('div', { class: 'absolute bottom-4 left-4 rounded-lg bg-white/70 px-3 py-1 text-sm font-semibold text-slate-700 backdrop-blur' },
+          `${s.neighborhood}, ${s.city}`),
+      ]),
 
     el('div', { class: 'grid grid-cols-1 gap-6 lg:grid-cols-3' }, [
       // Main column

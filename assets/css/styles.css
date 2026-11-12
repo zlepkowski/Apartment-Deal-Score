@@ -89,3 +89,14 @@ textarea {
   color: inherit;
   text-decoration: none;
 }
+
+/* ---- Photo gallery ------------------------------------------------------ */
+
+.ds-gallery-track {
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.ds-gallery-track::-webkit-scrollbar {
+  display: none;
+}
