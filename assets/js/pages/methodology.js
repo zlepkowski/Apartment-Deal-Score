@@ -3,7 +3,7 @@
 import { el, mount } from '../util/dom.js';
 
 const COMPONENTS = [
-  ['Price vs. comparable units', 50, 'We compute the listing\'s rent per square foot and compare it to the median $/sqft of similar units nearby. Cheaper-per-square-foot than its peers scores higher — this is the single biggest factor, just like in professional rent-comp analysis.'],
+  ['Price vs. comparable units', 50, 'We compute the listing\'s rent per square foot and compare it to the typical $/sqft of similar units nearby (see "Thin markets" below for how "typical" is worked out). Being right at typical earns half marks; 25% cheaper earns full marks. This is the single biggest factor, just like in professional rent-comp analysis.'],
   ['Amenity richness', 22, 'Each amenity carries a weight reflecting how much renters typically pay for it (laundry, parking, central A/C and outdoor space move rent the most). A unit\'s total amenity weight is compared to the local range.'],
   ['In-unit laundry', 10, 'Called out on its own because it\'s one of the most-requested features. In-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
   ['Space for the size class', 10, 'Square footage compared to other units of the same bedroom count nearby — more room for the same money scores higher.'],
@@ -31,7 +31,7 @@ export function methodologyPage(root) {
     el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, 'How the Deal Score works'),
     el('p', { class: 'mt-2 text-slate-600' },
       'The Deal Score is a 0–100 rating of how much apartment you get for the price, ' +
-      'compared to similar units in the same city and neighborhood. It\'s comparable-based — ' +
+      'compared to similar units in the same neighborhood and borough. It\'s comparable-based — ' +
       'the same approach professional analysts use to price rentals — so it stays meaningful ' +
       'as you add more listings to each market.'),
 
@@ -54,11 +54,28 @@ export function methodologyPage(root) {
     el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
       el('h2', { class: 'text-lg font-bold text-slate-900' }, 'The comp set'),
       el('p', { class: 'mt-1 text-sm text-slate-600' },
-        'For each listing we build a comparison set, preferring the tightest match with enough ' +
-        'data: same neighborhood + bedroom count, then same city + bedroom count, then the whole ' +
-        'city. The detail page always shows which comp set was used and how many listings it ' +
-        'contained, so the score is never a black box. The more real listings you add per market, ' +
-        'the sharper the scores get.'),
+        'For amenities and space, each listing is compared with the tightest set of other ' +
+        'listings that has enough data: same neighborhood + bedroom count, then same borough + ' +
+        'bedroom count, then the whole borough. A listing is never counted as its own comparable. ' +
+        'The detail page shows which set was used and how many listings it contained.'),
+    ]),
+
+    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
+      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'Thin markets: how "typical rent" is estimated'),
+      el('p', { class: 'mt-1 text-sm text-slate-600' },
+        'A neighborhood with only one or two listings of a given size can\'t say much on its own, ' +
+        'and the borough as a whole mixes luxury towers with walk-ups. So the typical $/sqft blends two estimates:'),
+      el('ul', { class: 'mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600' }, [
+        el('li', {}, 'Local: the median $/sqft of same-size units in the same neighborhood.'),
+        el('li', {}, 'Adjusted borough: the borough-wide median for that size, scaled by how pricey the ' +
+          'neighborhood runs compared with its borough across all its listings.'),
+      ]),
+      el('p', { class: 'mt-2 text-sm text-slate-600' },
+        'The more local comps there are, the more the local figure counts: one comp is weighted ' +
+        'one-third, two are half, six are three-quarters. Each listing shows a confidence level: high ' +
+        'with 3+ local comps, medium with at least one local comp or a full size class in the borough, ' +
+        'low otherwise. Low-confidence savings are flagged as rough estimates. Adding real listings ' +
+        'per neighborhood is what sharpens every score.'),
     ]),
     el('p', { class: 'mt-6 text-xs text-slate-400' },
       'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js.'),

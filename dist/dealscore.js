@@ -957,9 +957,10 @@ async function getListing(id) {
 // A listing's Deal Score (0–100) answers one question: "How much apartment do
 // you get for the price, compared to similar units nearby?"
 //
-// It is COMPARABLE-BASED — the industry-standard approach. We build a comp set
-// of similar units (same city, same bedroom count, ideally same neighborhood)
-// and score the listing against that set on five transparent components:
+// It is COMPARABLE-BASED — the industry-standard approach. Each listing is
+// compared with other units in the same city (a borough, for NYC) and, where
+// there's enough data, the same neighborhood and bedroom count. It is scored
+// on five transparent components:
 //
 //   Price vs comps ($/sqft) ............ 50 pts   (the big one)
 //   Amenity richness ................... 22 pts
@@ -969,8 +970,17 @@ async function getListing(id) {
 //                                        ------
 //                                        100 pts
 //
-// Every page reads scores through `scoreAll()`, and the detail page renders
-// the per-component breakdown so the score is never a black box.
+// A listing is never its own comparable: with small comp sets that would pull
+// the "typical" price toward the listing's own rent.
+//
+// The price component compares the listing's $/sqft with a "typical $/sqft"
+// anchor (see priceAnchor). The anchor blends the neighborhood's own
+// same-size comps with a borough-wide estimate adjusted for the neighborhood,
+// so thin markets don't produce wild savings figures.
+//
+// Every page reads scores through `scoreAll()` / `scoreListing()`, and the
+// detail page renders the per-component breakdown so the score is never a
+// black box.
 
 
 
@@ -978,40 +988,133 @@ async function getListing(id) {
 const WEIGHTS = { price: 50, amenities: 22, laundry: 10, space: 10, quality: 8 };
 const MIN_COMPS = 3;
 
-// Pick the tightest comp set with enough members for a stable comparison:
-// neighborhood+beds  ->  city+beds  ->  city (any beds).
-function buildCompSet(listing, all) {
-  const sameCity = all.filter((l) => l.citySlug === listing.citySlug && l.sqft > 0 && l.rent > 0);
+// Sparse-market tuning for the price anchor.
+//
+// NBHD_PRIOR: how many same-neighborhood, same-size comps it takes before they
+//   count as much as the borough-wide estimate. With 2: one comp → 33%
+//   neighborhood, two → 50%, six → 75%.
+// LOCATION_PRIOR: a pseudo-count that pulls a neighborhood's price level toward
+//   the borough average (1.0×) when the neighborhood has only a few listings.
+const NBHD_PRIOR = 2;
+const LOCATION_PRIOR = 1;
 
-  const nbhd = sameCity.filter((l) => l.neighborhoodSlug === listing.neighborhoodSlug && l.beds === listing.beds);
-  if (nbhd.length >= MIN_COMPS) {
-    return { comps: nbhd, basis: `${listing.neighborhood} ${bedLabel(listing.beds)} units`, tightness: 'neighborhood' };
-  }
-  const cityBeds = sameCity.filter((l) => l.beds === listing.beds);
-  if (cityBeds.length >= MIN_COMPS) {
-    return { comps: cityBeds, basis: `${listing.city} ${bedLabel(listing.beds)} units`, tightness: 'city-beds' };
-  }
-  if (sameCity.length >= MIN_COMPS) {
-    return { comps: sameCity, basis: `${listing.city} rentals (mixed sizes)`, tightness: 'city' };
-  }
-  return { comps: sameCity, basis: `${listing.city} rentals`, tightness: 'sparse' };
-}
+const unitPpsf = (l) => ppsf(l.rent, l.sqft);
 
 function bedLabel(n) {
   return n === 0 ? 'studio' : `${n}-bed`;
 }
 
+// Every scorable listing in the same city/borough, excluding the listing itself.
+function peersOf(listing, all) {
+  return all.filter((l) =>
+    l !== listing && l.id !== listing.id &&
+    l.citySlug === listing.citySlug && l.sqft > 0 && l.rent > 0);
+}
+
+// Comp set for the amenity and space components: the tightest set with enough
+// members — neighborhood+beds → city+beds → city (any beds).
+function buildCompSet(listing, peers) {
+  const nbhd = peers.filter((l) => l.neighborhoodSlug === listing.neighborhoodSlug && l.beds === listing.beds);
+  if (nbhd.length >= MIN_COMPS) {
+    return { comps: nbhd, basis: `${listing.neighborhood} ${bedLabel(listing.beds)} units`, tightness: 'neighborhood' };
+  }
+  const cityBeds = peers.filter((l) => l.beds === listing.beds);
+  if (cityBeds.length >= MIN_COMPS) {
+    return { comps: cityBeds, basis: `${listing.city} ${bedLabel(listing.beds)} units`, tightness: 'city-beds' };
+  }
+  if (peers.length >= MIN_COMPS) {
+    return { comps: peers, basis: `${listing.city} rentals (mixed sizes)`, tightness: 'city' };
+  }
+  return { comps: peers, basis: `${listing.city} rentals`, tightness: 'sparse' };
+}
+
+// --- price anchor -----------------------------------------------------------
+
+// Typical $/sqft for a bedroom count across the whole city/borough. If that
+// size class is thin, widen to neighboring sizes (±1 bedroom), then all sizes.
+function marketPpsf(beds, peers, city) {
+  const tiers = [
+    { tier: 'beds', pick: (p) => p.beds === beds, basis: `${city} ${bedLabel(beds)} units` },
+    { tier: 'near-beds', pick: (p) => Math.abs(p.beds - beds) <= 1, basis: `${city} units within one bedroom of this size` },
+    { tier: 'all', pick: () => true, basis: `${city} rentals (all sizes)` },
+  ];
+  for (const t of tiers) {
+    const set = peers.filter(t.pick);
+    if (set.length >= MIN_COMPS || (t.tier === 'all' && set.length)) {
+      return { ppsf: median(set.map(unitPpsf)), count: set.length, basis: t.basis, tier: t.tier };
+    }
+  }
+  return null;
+}
+
+// How expensive this neighborhood runs relative to its borough, mix-adjusted:
+// each neighborhood unit is compared with the borough market for ITS size, and
+// we take the median ratio. Few listings → shrunk toward 1.0 (borough average).
+function locationFactor(listing, peers, market) {
+  const nbhd = peers.filter((p) => p.neighborhoodSlug === listing.neighborhoodSlug);
+  const ratios = nbhd
+    .map((p) => {
+      const m = market(p.beds);
+      return m && m.ppsf ? unitPpsf(p) / m.ppsf : null;
+    })
+    .filter((r) => r != null && Number.isFinite(r));
+  if (!ratios.length) return { factor: 1, raw: null, count: 0 };
+  const raw = median(ratios);
+  const n = ratios.length;
+  return { factor: (n * raw + LOCATION_PRIOR) / (n + LOCATION_PRIOR), raw, count: n };
+}
+
+// The "typical $/sqft" a comparable unit would rent for. Blends two estimates:
+//   local    median $/sqft of same-size units in the same neighborhood
+//   market   borough-wide same-size median × the neighborhood's price level
+// weighted by how many local comps exist, so one or two local listings can't
+// swing the anchor on their own and an empty neighborhood still gets a sane
+// estimate instead of falling back to a mixed luxury/budget citywide median.
+function priceAnchor(listing, all) {
+  const peers = peersOf(listing, all);
+  const cache = new Map();
+  const market = (beds) => {
+    if (!cache.has(beds)) cache.set(beds, marketPpsf(beds, peers, listing.city));
+    return cache.get(beds);
+  };
+
+  const m = market(listing.beds);
+  if (!m || !m.ppsf) return null;
+
+  const location = locationFactor(listing, peers, market);
+  const adjustedMarket = m.ppsf * location.factor;
+
+  const local = peers.filter((p) => p.neighborhoodSlug === listing.neighborhoodSlug && p.beds === listing.beds);
+  const localPpsf = median(local.map(unitPpsf));
+  const n = local.length;
+  const weight = n ? n / (n + NBHD_PRIOR) : 0;
+  const anchorPpsf = n ? weight * localPpsf + (1 - weight) * adjustedMarket : adjustedMarket;
+
+  let confidence = 'low';
+  if (n >= MIN_COMPS) confidence = 'high';
+  else if (n >= 1 || m.tier === 'beds') confidence = 'medium';
+
+  return {
+    ppsf: anchorPpsf,
+    confidence,
+    local: { ppsf: localPpsf, count: n },
+    market: { ppsf: m.ppsf, count: m.count, basis: m.basis, tier: m.tier },
+    location,
+    adjustedMarketPpsf: adjustedMarket,
+    weight,
+  };
+}
+
 // --- individual component scorers ------------------------------------------
 
-function scorePrice(listing, comps) {
-  const lp = ppsf(listing.rent, listing.sqft);
-  const compMedian = median(comps.map((c) => ppsf(c.rent, c.sqft)));
-  if (!lp || !compMedian) return { points: WEIGHTS.price / 2, ratio: 1, compMedian, listingPpsf: lp };
-  // ratio > 1 means cheaper per sqft than the typical comp.
-  const ratio = compMedian / lp;
+function scorePrice(listing, anchor) {
+  const lp = unitPpsf(listing);
+  if (!lp || !anchor) return { points: WEIGHTS.price / 2, ratio: 1, anchorPpsf: null, listingPpsf: lp };
+  // ratio > 1 means cheaper per sqft than the typical comparable unit.
+  const ratio = anchor.ppsf / lp;
   // Centered so "exactly typical" (ratio 1.0) scores half marks; ±25% spans the range.
   const points = remap(ratio, 0.75, 1.25, 0, WEIGHTS.price);
-  return { points, ratio, compMedian, listingPpsf: lp };
+  return { points, ratio, anchorPpsf: anchor.ppsf, listingPpsf: lp };
 }
 
 function scoreAmenities(listing, comps) {
@@ -1075,9 +1178,11 @@ function grade(score) {
 // --- public API -------------------------------------------------------------
 
 function scoreListing(listing, all) {
-  const { comps, basis, tightness } = buildCompSet(listing, all);
+  const peers = peersOf(listing, all);
+  const { comps, basis, tightness } = buildCompSet(listing, peers);
+  const anchor = priceAnchor(listing, all);
 
-  const price = scorePrice(listing, comps);
+  const price = scorePrice(listing, anchor);
   const amenities = scoreAmenities(listing, comps);
   const laundry = scoreLaundry(listing);
   const space = scoreSpace(listing, comps);
@@ -1089,20 +1194,20 @@ function scoreListing(listing, all) {
     100,
   );
 
-  // "Typical" rent for the comp set at this unit's size — the market anchor.
-  const fairRent = price.compMedian ? price.compMedian * listing.sqft : null;
+  // "Typical" rent for a comparable unit at this size — the market anchor.
+  const fairRent = anchor ? anchor.ppsf * listing.sqft : null;
   const monthlySavings = fairRent != null ? fairRent - listing.rent : null;
 
   const breakdown = [
     {
       key: 'price', label: 'Price vs. comparable units', points: price.points, max: WEIGHTS.price,
-      detail: price.listingPpsf && price.compMedian
-        ? `$${price.listingPpsf.toFixed(2)}/sqft vs. $${price.compMedian.toFixed(2)}/sqft typical`
+      detail: price.listingPpsf && price.anchorPpsf
+        ? `$${price.listingPpsf.toFixed(2)}/sqft vs. $${price.anchorPpsf.toFixed(2)}/sqft typical`
         : 'Not enough data',
     },
     {
       key: 'amenities', label: 'Amenities', points: amenities.points, max: WEIGHTS.amenities,
-      detail: `${listing.amenities.length} amenities (richness ${amenities.weight} vs. ${amenities.compMin}–${amenities.compMax} locally)`,
+      detail: `${(listing.amenities || []).length} amenities (richness ${amenities.weight} vs. ${amenities.compMin}–${amenities.compMax} locally)`,
     },
     { key: 'laundry', label: 'In-unit laundry', points: laundry.points, max: WEIGHTS.laundry, detail: laundry.note },
     {
@@ -1121,6 +1226,8 @@ function scoreListing(listing, all) {
     grade: grade(total),
     fairRent: fairRent != null ? Math.round(fairRent) : null,
     monthlySavings: monthlySavings != null ? Math.round(monthlySavings) : null,
+    priceAnchor: anchor,
+    priceConfidence: anchor ? anchor.confidence : 'low',
     compBasis: basis,
     compCount: comps.length,
     compTightness: tightness,
@@ -1220,12 +1327,17 @@ function listingCard(scored) {
   const accent = ACCENT[scored.accent] || ACCENT.sky;
   const topAmenities = (scored.amenities || []).slice(0, 4).map((k) => amenity(k));
 
+  // Savings backed by few comparable listings are shown muted and flagged.
   const savings = scored.monthlySavings;
-  const savingsLine = savings != null && savings > 30
-    ? el('div', { class: 'text-xs font-semibold text-emerald-600' }, `~${moneySigned(savings)}/mo below typical`)
-    : savings != null && savings < -30
-      ? el('div', { class: 'text-xs font-semibold text-rose-500' }, `~${moneySigned(savings)}/mo above typical`)
-      : el('div', { class: 'text-xs text-slate-400' }, 'Around typical price');
+  const rough = scored.priceConfidence === 'low';
+  const note = rough ? ' · rough estimate' : '';
+  const savingsLine = savings == null
+    ? el('div', { class: 'text-xs text-slate-400' }, 'Not enough comps to price yet')
+    : savings > 30
+      ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-emerald-600'}` }, `~${money(Math.abs(savings))}/mo below typical${note}`)
+      : savings < -30
+        ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-rose-500'}` }, `~${money(Math.abs(savings))}/mo above typical${note}`)
+        : el('div', { class: 'text-xs text-slate-400' }, `Around typical price${note}`);
 
   return el('a', {
     href: `#/listing/${scored.id}`,
@@ -1391,7 +1503,7 @@ function sortListings(list, sort) {
     price_asc: (a, b) => a.rent - b.rent,
     price_desc: (a, b) => b.rent - a.rent,
     ppsf_asc: (a, b) => ppsf(a.rent, a.sqft) - ppsf(b.rent, b.sqft),
-    savings: (a, b) => (b.monthlySavings || -1e9) - (a.monthlySavings || -1e9),
+    savings: (a, b) => (b.monthlySavings ?? -1e9) - (a.monthlySavings ?? -1e9),
   };
   return [...list].sort(by[sort] || by.deal);
 }
@@ -1488,6 +1600,47 @@ function breakdownRow(b) {
   ]);
 }
 
+const CONFIDENCE = {
+  high: { label: 'High confidence', cls: 'bg-emerald-50 text-emerald-700' },
+  medium: { label: 'Medium confidence', cls: 'bg-amber-50 text-amber-700' },
+  low: { label: 'Low confidence', cls: 'bg-slate-100 text-slate-600' },
+};
+
+const perSqft = (v) => `$${v.toFixed(2)}/sqft`;
+
+// Plain-language walk-through of how the "typical rent" anchor was built, so a
+// thin-market estimate is visibly an estimate.
+function anchorExplainer(s) {
+  const a = s.priceAnchor;
+  if (!a) {
+    return el('p', { class: 'mt-2 text-xs text-slate-500' },
+      `No other ${s.city} listings to compare against yet. Add more listings in this area to price it.`);
+  }
+  const bed = bedLabel(s.beds);
+  const levelPct = Math.round((a.location.factor - 1) * 100);
+  const level = Math.abs(levelPct) < 3
+    ? `about at the ${s.city} average`
+    : `${Math.abs(levelPct)}% ${levelPct > 0 ? 'above' : 'below'} the ${s.city} average`;
+  const step = (text) => el('li', { class: 'text-xs text-slate-600' }, text);
+  const conf = CONFIDENCE[a.confidence];
+
+  return el('div', { class: 'mt-3' }, [
+    el('span', { class: `inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${conf.cls}` }, conf.label),
+    el('ul', { class: 'mt-2 list-disc space-y-1 pl-4' }, [
+      a.local.count
+        ? step(`${a.local.count} other ${s.neighborhood} ${bed} listing${a.local.count === 1 ? '' : 's'}: median ${perSqft(a.local.ppsf)}.`)
+        : step(`No other ${s.neighborhood} ${bed} listings yet.`),
+      step(`${a.market.basis}: median ${perSqft(a.market.ppsf)} across ${a.market.count} listings.`),
+      a.location.count
+        ? step(`${s.neighborhood} runs ${level}, so the ${s.city}-wide figure adjusts to ${perSqft(a.adjustedMarketPpsf)}.`)
+        : null,
+      step(a.local.count
+        ? `Weighted ${Math.round(a.weight * 100)}% neighborhood / ${Math.round((1 - a.weight) * 100)}% adjusted ${s.city} → ${perSqft(a.ppsf)} × ${s.sqft} sqft.`
+        : `Typical: ${perSqft(a.ppsf)} × ${s.sqft} sqft.`),
+    ]),
+  ]);
+}
+
 function fact(label, value) {
   return el('div', { class: 'rounded-xl bg-slate-50 px-3 py-2' }, [
     el('div', { class: 'text-xs text-slate-400' }, label),
@@ -1516,9 +1669,9 @@ async function listingPage(root, ctx) {
           : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
     },
     s.monthlySavings > 30
-      ? `Priced about ${moneySigned(s.monthlySavings)}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
+      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
       : s.monthlySavings < -30
-        ? `Priced about ${moneySigned(s.monthlySavings)}/mo above the typical comparable unit.`
+        ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above the typical comparable unit.`
         : 'Priced right around the typical comparable unit.')
     : null;
 
@@ -1574,7 +1727,7 @@ async function listingPage(root, ctx) {
           ]),
           el('div', { class: 'mt-3' }, [scoreBadge(s, 'lg')]),
           el('p', { class: 'mt-3 text-xs text-slate-500' },
-            `Scored against ${s.compCount} comparable listings · ${s.compBasis}.`),
+            `Amenities and space compared with ${s.compCount} other listings · ${s.compBasis}.`),
           el('div', { class: 'mt-4 divide-y divide-slate-100' }, s.breakdown.map(breakdownRow)),
           el('a', { href: '#/methodology', class: 'mt-4 inline-block text-xs text-emerald-600 underline' },
             'How is this calculated?'),
@@ -1582,7 +1735,7 @@ async function listingPage(root, ctx) {
         el('div', { class: 'mt-4 rounded-2xl border border-slate-200 bg-white p-5' }, [
           el('div', { class: 'text-xs text-slate-400' }, 'Typical rent for a comparable unit'),
           el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
-          el('div', { class: 'mt-1 text-xs text-slate-500' }, 'Based on local median $/sqft for this size class.'),
+          anchorExplainer(s),
           s.url
             ? el('a', { href: s.url, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
             : el('button', {
@@ -1601,7 +1754,7 @@ async function listingPage(root, ctx) {
 
 
 const COMPONENTS = [
-  ['Price vs. comparable units', 50, 'We compute the listing\'s rent per square foot and compare it to the median $/sqft of similar units nearby. Cheaper-per-square-foot than its peers scores higher — this is the single biggest factor, just like in professional rent-comp analysis.'],
+  ['Price vs. comparable units', 50, 'We compute the listing\'s rent per square foot and compare it to the typical $/sqft of similar units nearby (see "Thin markets" below for how "typical" is worked out). Being right at typical earns half marks; 25% cheaper earns full marks. This is the single biggest factor, just like in professional rent-comp analysis.'],
   ['Amenity richness', 22, 'Each amenity carries a weight reflecting how much renters typically pay for it (laundry, parking, central A/C and outdoor space move rent the most). A unit\'s total amenity weight is compared to the local range.'],
   ['In-unit laundry', 10, 'Called out on its own because it\'s one of the most-requested features. In-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
   ['Space for the size class', 10, 'Square footage compared to other units of the same bedroom count nearby — more room for the same money scores higher.'],
@@ -1629,7 +1782,7 @@ function methodologyPage(root) {
     el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, 'How the Deal Score works'),
     el('p', { class: 'mt-2 text-slate-600' },
       'The Deal Score is a 0–100 rating of how much apartment you get for the price, ' +
-      'compared to similar units in the same city and neighborhood. It\'s comparable-based — ' +
+      'compared to similar units in the same neighborhood and borough. It\'s comparable-based — ' +
       'the same approach professional analysts use to price rentals — so it stays meaningful ' +
       'as you add more listings to each market.'),
 
@@ -1652,11 +1805,28 @@ function methodologyPage(root) {
     el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
       el('h2', { class: 'text-lg font-bold text-slate-900' }, 'The comp set'),
       el('p', { class: 'mt-1 text-sm text-slate-600' },
-        'For each listing we build a comparison set, preferring the tightest match with enough ' +
-        'data: same neighborhood + bedroom count, then same city + bedroom count, then the whole ' +
-        'city. The detail page always shows which comp set was used and how many listings it ' +
-        'contained, so the score is never a black box. The more real listings you add per market, ' +
-        'the sharper the scores get.'),
+        'For amenities and space, each listing is compared with the tightest set of other ' +
+        'listings that has enough data: same neighborhood + bedroom count, then same borough + ' +
+        'bedroom count, then the whole borough. A listing is never counted as its own comparable. ' +
+        'The detail page shows which set was used and how many listings it contained.'),
+    ]),
+
+    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
+      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'Thin markets: how "typical rent" is estimated'),
+      el('p', { class: 'mt-1 text-sm text-slate-600' },
+        'A neighborhood with only one or two listings of a given size can\'t say much on its own, ' +
+        'and the borough as a whole mixes luxury towers with walk-ups. So the typical $/sqft blends two estimates:'),
+      el('ul', { class: 'mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600' }, [
+        el('li', {}, 'Local: the median $/sqft of same-size units in the same neighborhood.'),
+        el('li', {}, 'Adjusted borough: the borough-wide median for that size, scaled by how pricey the ' +
+          'neighborhood runs compared with its borough across all its listings.'),
+      ]),
+      el('p', { class: 'mt-2 text-sm text-slate-600' },
+        'The more local comps there are, the more the local figure counts: one comp is weighted ' +
+        'one-third, two are half, six are three-quarters. Each listing shows a confidence level: high ' +
+        'with 3+ local comps, medium with at least one local comp or a full size class in the borough, ' +
+        'low otherwise. Low-confidence savings are flagged as rough estimates. Adding real listings ' +
+        'per neighborhood is what sharpens every score.'),
     ]),
     el('p', { class: 'mt-6 text-xs text-slate-400' },
       'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js.'),

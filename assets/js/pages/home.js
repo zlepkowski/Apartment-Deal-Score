@@ -63,7 +63,7 @@ function sortListings(list, sort) {
     price_asc: (a, b) => a.rent - b.rent,
     price_desc: (a, b) => b.rent - a.rent,
     ppsf_asc: (a, b) => ppsf(a.rent, a.sqft) - ppsf(b.rent, b.sqft),
-    savings: (a, b) => (b.monthlySavings || -1e9) - (a.monthlySavings || -1e9),
+    savings: (a, b) => (b.monthlySavings ?? -1e9) - (a.monthlySavings ?? -1e9),
   };
   return [...list].sort(by[sort] || by.deal);
 }

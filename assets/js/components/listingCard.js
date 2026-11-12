@@ -1,7 +1,7 @@
 // A single listing card for the browse grid.
 
 import { el } from '../util/dom.js';
-import { money, moneySigned, beds, ppsfText } from '../util/format.js';
+import { money, beds, ppsfText } from '../util/format.js';
 import { scoreBadge } from './scoreBadge.js';
 import { amenity } from '../data/amenities.js';
 
@@ -18,12 +18,17 @@ export function listingCard(scored) {
   const accent = ACCENT[scored.accent] || ACCENT.sky;
   const topAmenities = (scored.amenities || []).slice(0, 4).map((k) => amenity(k));
 
+  // Savings backed by few comparable listings are shown muted and flagged.
   const savings = scored.monthlySavings;
-  const savingsLine = savings != null && savings > 30
-    ? el('div', { class: 'text-xs font-semibold text-emerald-600' }, `~${moneySigned(savings)}/mo below typical`)
-    : savings != null && savings < -30
-      ? el('div', { class: 'text-xs font-semibold text-rose-500' }, `~${moneySigned(savings)}/mo above typical`)
-      : el('div', { class: 'text-xs text-slate-400' }, 'Around typical price');
+  const rough = scored.priceConfidence === 'low';
+  const note = rough ? ' · rough estimate' : '';
+  const savingsLine = savings == null
+    ? el('div', { class: 'text-xs text-slate-400' }, 'Not enough comps to price yet')
+    : savings > 30
+      ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-emerald-600'}` }, `~${money(Math.abs(savings))}/mo below typical${note}`)
+      : savings < -30
+        ? el('div', { class: `text-xs font-semibold ${rough ? 'text-slate-500' : 'text-rose-500'}` }, `~${money(Math.abs(savings))}/mo above typical${note}`)
+        : el('div', { class: 'text-xs text-slate-400' }, `Around typical price${note}`);
 
   return el('a', {
     href: `#/listing/${scored.id}`,

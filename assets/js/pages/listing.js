@@ -2,9 +2,9 @@
 // breakdown of how its Deal Score was computed.
 
 import { el, mount } from '../util/dom.js';
-import { money, moneySigned, bedsLong, ppsfText, titleize } from '../util/format.js';
+import { money, bedsLong, ppsfText, titleize } from '../util/format.js';
 import { getListings } from '../data/adapter.js';
-import { scoreListing } from '../core/score.js';
+import { scoreListing, bedLabel } from '../core/score.js';
 import { scoreBadge, toneOf } from '../components/scoreBadge.js';
 import { amenity } from '../data/amenities.js';
 import { navigate } from '../util/router.js';
@@ -36,6 +36,47 @@ function breakdownRow(b) {
   ]);
 }
 
+const CONFIDENCE = {
+  high: { label: 'High confidence', cls: 'bg-emerald-50 text-emerald-700' },
+  medium: { label: 'Medium confidence', cls: 'bg-amber-50 text-amber-700' },
+  low: { label: 'Low confidence', cls: 'bg-slate-100 text-slate-600' },
+};
+
+const perSqft = (v) => `$${v.toFixed(2)}/sqft`;
+
+// Plain-language walk-through of how the "typical rent" anchor was built, so a
+// thin-market estimate is visibly an estimate.
+function anchorExplainer(s) {
+  const a = s.priceAnchor;
+  if (!a) {
+    return el('p', { class: 'mt-2 text-xs text-slate-500' },
+      `No other ${s.city} listings to compare against yet. Add more listings in this area to price it.`);
+  }
+  const bed = bedLabel(s.beds);
+  const levelPct = Math.round((a.location.factor - 1) * 100);
+  const level = Math.abs(levelPct) < 3
+    ? `about at the ${s.city} average`
+    : `${Math.abs(levelPct)}% ${levelPct > 0 ? 'above' : 'below'} the ${s.city} average`;
+  const step = (text) => el('li', { class: 'text-xs text-slate-600' }, text);
+  const conf = CONFIDENCE[a.confidence];
+
+  return el('div', { class: 'mt-3' }, [
+    el('span', { class: `inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${conf.cls}` }, conf.label),
+    el('ul', { class: 'mt-2 list-disc space-y-1 pl-4' }, [
+      a.local.count
+        ? step(`${a.local.count} other ${s.neighborhood} ${bed} listing${a.local.count === 1 ? '' : 's'}: median ${perSqft(a.local.ppsf)}.`)
+        : step(`No other ${s.neighborhood} ${bed} listings yet.`),
+      step(`${a.market.basis}: median ${perSqft(a.market.ppsf)} across ${a.market.count} listings.`),
+      a.location.count
+        ? step(`${s.neighborhood} runs ${level}, so the ${s.city}-wide figure adjusts to ${perSqft(a.adjustedMarketPpsf)}.`)
+        : null,
+      step(a.local.count
+        ? `Weighted ${Math.round(a.weight * 100)}% neighborhood / ${Math.round((1 - a.weight) * 100)}% adjusted ${s.city} → ${perSqft(a.ppsf)} × ${s.sqft} sqft.`
+        : `Typical: ${perSqft(a.ppsf)} × ${s.sqft} sqft.`),
+    ]),
+  ]);
+}
+
 function fact(label, value) {
   return el('div', { class: 'rounded-xl bg-slate-50 px-3 py-2' }, [
     el('div', { class: 'text-xs text-slate-400' }, label),
@@ -64,9 +105,9 @@ export async function listingPage(root, ctx) {
           : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
     },
     s.monthlySavings > 30
-      ? `Priced about ${moneySigned(s.monthlySavings)}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
+      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
       : s.monthlySavings < -30
-        ? `Priced about ${moneySigned(s.monthlySavings)}/mo above the typical comparable unit.`
+        ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above the typical comparable unit.`
         : 'Priced right around the typical comparable unit.')
     : null;
 
@@ -122,7 +163,7 @@ export async function listingPage(root, ctx) {
           ]),
           el('div', { class: 'mt-3' }, [scoreBadge(s, 'lg')]),
           el('p', { class: 'mt-3 text-xs text-slate-500' },
-            `Scored against ${s.compCount} comparable listings · ${s.compBasis}.`),
+            `Amenities and space compared with ${s.compCount} other listings · ${s.compBasis}.`),
           el('div', { class: 'mt-4 divide-y divide-slate-100' }, s.breakdown.map(breakdownRow)),
           el('a', { href: '#/methodology', class: 'mt-4 inline-block text-xs text-emerald-600 underline' },
             'How is this calculated?'),
@@ -130,7 +171,7 @@ export async function listingPage(root, ctx) {
         el('div', { class: 'mt-4 rounded-2xl border border-slate-200 bg-white p-5' }, [
           el('div', { class: 'text-xs text-slate-400' }, 'Typical rent for a comparable unit'),
           el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
-          el('div', { class: 'mt-1 text-xs text-slate-500' }, 'Based on local median $/sqft for this size class.'),
+          anchorExplainer(s),
           s.url
             ? el('a', { href: s.url, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
             : el('button', {
