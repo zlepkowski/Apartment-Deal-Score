@@ -1,6 +1,7 @@
-// Filter + sort bar for the browse page. Pure UI: it reads the current filter
-// state and calls onChange with a new state object. The page owns the state
-// and the URL sync.
+// Filter + sort bar for the browse page. Pure UI: it renders from the filter
+// state and calls onChange with a PATCH of only the fields that changed. The
+// page owns the state (and merges patches into its current copy) plus the URL
+// sync — the bar isn't re-rendered on every change, so it must not hold state.
 
 import { el } from '../util/dom.js';
 import { titleize } from '../util/format.js';
@@ -17,7 +18,7 @@ function select(label, value, options, onChange) {
 }
 
 export function filterBar(state, derived, onChange) {
-  const set = (patch) => onChange({ ...state, ...patch });
+  const set = (patch) => onChange(patch);
 
   const cityOpts = [{ value: '', label: 'All boroughs' },
     ...derived.cities.map((c) => ({ value: c.slug, label: c.name }))];

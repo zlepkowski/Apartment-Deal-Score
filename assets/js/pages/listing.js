@@ -2,12 +2,12 @@
 // breakdown of how its Deal Score was computed.
 
 import { el, mount } from '../util/dom.js';
-import { money, bedsLong, ppsfText, titleize } from '../util/format.js';
+import { money, bedsLong, ppsfText, titleize, httpUrl } from '../util/format.js';
 import { getListings } from '../data/adapter.js';
-import { scoreListing, bedLabel } from '../core/score.js';
+import { scoreAll, bedLabel } from '../core/score.js';
 import { scoreBadge, toneOf } from '../components/scoreBadge.js';
+import { listingsMap, hasLocation } from '../components/map.js';
 import { amenity } from '../data/amenities.js';
-import { navigate } from '../util/router.js';
 
 const HERO_ACCENT = {
   rose: 'from-rose-300 to-rose-100', amber: 'from-amber-300 to-amber-100',
@@ -94,9 +94,14 @@ export async function listingPage(root, ctx) {
     ]));
     return;
   }
-  const s = scoreListing(raw, all);
+  // Score everything so the location map can show neighbors' scores too.
+  const scored = scoreAll(all);
+  const s = scored.find((l) => l.id === raw.id);
   const t = toneOf(s.grade);
   const accent = HERO_ACCENT[s.accent] || HERO_ACCENT.sky;
+  const externalUrl = s.url ? httpUrl(s.url) : null;
+  const areaHash = `#/?city=${encodeURIComponent(s.citySlug)}&neighborhood=${encodeURIComponent(s.neighborhoodSlug)}`;
+  const locMap = hasLocation(s) ? listingsMap({ heightClass: 'h-64' }) : null;
 
   const savingsBanner = s.monthlySavings != null
     ? el('div', {
@@ -105,7 +110,7 @@ export async function listingPage(root, ctx) {
           : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
     },
     s.monthlySavings > 30
-      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
+      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedLabel(s.beds)} in this area (~${money(s.monthlySavings * 12)}/yr).`
       : s.monthlySavings < -30
         ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above the typical comparable unit.`
         : 'Priced right around the typical comparable unit.')
@@ -153,6 +158,10 @@ export async function listingPage(root, ctx) {
         (s.utilitiesIncluded || []).length
           ? el('div', { class: 'mt-2 text-sm text-slate-600' }, `Utilities included: ${s.utilitiesIncluded.map(titleize).join(', ')}`)
           : null,
+        locMap ? el('h2', { class: 'mt-6 text-lg font-bold text-slate-900' }, 'Location') : null,
+        locMap ? el('div', { class: 'mt-2' }, [locMap.node]) : null,
+        locMap ? el('p', { class: 'mt-1 text-xs text-slate-400' },
+          `Pins show Deal Scores. Other ${s.city} listings are faded; click one to compare.`) : null,
       ]),
 
       // Score sidebar
@@ -172,15 +181,17 @@ export async function listingPage(root, ctx) {
           el('div', { class: 'text-xs text-slate-400' }, 'Typical rent for a comparable unit'),
           el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
           anchorExplainer(s),
-          s.url
-            ? el('a', { href: s.url, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
-            : el('button', {
-              class: 'mt-3 block w-full rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white',
-              onClick: () => navigate('#/'),
-            }, 'See more in this area'),
+          externalUrl
+            ? el('a', { href: externalUrl, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
+            : null,
+          el('a', {
+            href: areaHash,
+            class: 'mt-2 block rounded-lg border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-800 hover:bg-slate-50',
+          }, `More in ${s.neighborhood}`),
         ]),
       ]),
     ]),
   ]);
   mount(root, page);
+  if (locMap) locMap.setListings(scored.filter((l) => l.citySlug === s.citySlug), { focusId: s.id });
 }

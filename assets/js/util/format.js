@@ -48,3 +48,15 @@ export function titleize(slug) {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
+
+// Returns the URL if it's an absolute http(s) URL, else null. Use for any
+// user- or backend-supplied link/image so `javascript:` and friends never
+// reach an href or src.
+export function httpUrl(u) {
+  try {
+    const parsed = new URL(String(u));
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}

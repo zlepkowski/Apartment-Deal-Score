@@ -23,6 +23,7 @@ const order = [
   'assets/js/data/adapter.js',
   'assets/js/core/score.js',
   'assets/js/components/scoreBadge.js',
+  'assets/js/components/map.js',
   'assets/js/components/header.js',
   'assets/js/components/listingCard.js',
   'assets/js/components/filters.js',

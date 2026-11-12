@@ -53,6 +53,18 @@ function titleize(slug) {
     .join(' ');
 }
 
+// Returns the URL if it's an absolute http(s) URL, else null. Use for any
+// user- or backend-supplied link/image so `javascript:` and friends never
+// reach an href or src.
+function httpUrl(u) {
+  try {
+    const parsed = new URL(String(u));
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ===== assets/js/util/stats.js ===== */
 // Tiny statistics helpers used by the scoring engine.
 
@@ -1275,6 +1287,132 @@ function scoreBadge(scored, size = 'sm') {
   ]);
 }
 
+/* ===== assets/js/components/map.js ===== */
+// Listings map — Leaflet + OpenStreetMap tiles, no API key.
+//
+// Leaflet is loaded as a global (`L`) by a CDN <script> in index.html. If it
+// can't load (offline, blocked CDN) the map shows a short notice and the rest
+// of the page keeps working.
+//
+// Pins are Deal Score pills colored by grade (styles in assets/css/styles.css).
+
+
+
+// Swap the tile source here. OSM's standard tiles are fine for light traffic
+// and require the attribution below; for a high-traffic site use a hosted tile
+// provider (MapTiler, Stadia, Thunderforest, ...) per OSM's tile usage policy.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+const DEFAULT_VIEW = { center: [40.73, -73.95], zoom: 11 }; // New York City
+const TONES = new Set(['great', 'good', 'fair', 'below', 'poor']);
+
+function hasLocation(l) {
+  return Number.isFinite(l.lat) && Number.isFinite(l.lng);
+}
+
+// Maps whose container has left the page (route change) are torn down the
+// next time a map is created, so Leaflet's window listeners don't pile up.
+const live = new Set();
+function reapDetached() {
+  for (const m of live) {
+    if (!m.getContainer().isConnected) {
+      m.remove();
+      live.delete(m);
+    }
+  }
+}
+
+function pinIcon(s, { active, muted }) {
+  const tone = TONES.has(s.grade && s.grade.tone) ? s.grade.tone : 'fair';
+  const cls = ['ds-pin', `ds-pin--${tone}`, active ? 'ds-pin--active' : '', muted ? 'ds-pin--muted' : ''].join(' ');
+  return window.L.divIcon({
+    className: 'ds-pin-wrap',
+    html: `<span class="${cls}">${Math.round(Number(s.dealScore) || 0)}</span>`,
+    iconSize: [34, 22],
+    iconAnchor: [17, 11],
+    popupAnchor: [0, -12],
+  });
+}
+
+function popup(s) {
+  const cover = (s.images || [])[0];
+  return el('a', { href: `#/listing/${encodeURIComponent(s.id)}`, class: 'ds-popup block w-52' }, [
+    cover ? el('img', {
+      src: cover, alt: '', loading: 'lazy', class: 'mb-2 h-24 w-full rounded-md object-cover',
+      onError: (e) => e.target.remove(),
+    }) : null,
+    el('div', { class: 'text-sm font-bold text-slate-900' }, `${money(s.rent)}/mo · ${beds(s.beds)}`),
+    el('div', { class: 'truncate text-xs text-slate-700' }, s.title),
+    el('div', { class: 'text-xs text-slate-500' }, `${s.neighborhood} · Deal Score ${s.dealScore} · ${s.grade.label}`),
+  ]);
+}
+
+// Returns { node, setListings(listings, { focusId }) }. Put `node` in the page,
+// then call setListings whenever the visible listings change; the map keeps its
+// tiles and only swaps pins. With focusId, that listing is centered and
+// highlighted and the rest are muted.
+function listingsMap({ heightClass = 'h-[28rem]' } = {}) {
+  const node = el('div', {
+    class: `ds-map relative z-0 w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 ${heightClass}`,
+    role: 'region',
+    'aria-label': 'Map of listings',
+  });
+  let map = null;
+  let pins = null;
+  let latest = null;
+  let scheduled = false;
+
+  function unavailable() {
+    node.innerHTML = '';
+    node.appendChild(el('div', { class: 'grid h-full place-items-center p-6 text-center text-sm text-slate-500' },
+      'Map unavailable: the map library could not be loaded.'));
+  }
+
+  function draw() {
+    scheduled = false;
+    if (!node.isConnected) return; // page changed before we got here
+    if (!map) {
+      reapDetached();
+      map = window.L.map(node, { scrollWheelZoom: false });
+      window.L.tileLayer(TILE_URL, { maxZoom: 19, attribution: TILE_ATTRIBUTION }).addTo(map);
+      pins = window.L.layerGroup().addTo(map);
+      live.add(map);
+    }
+    const { listings, focusId } = latest;
+    pins.clearLayers();
+    const located = listings.filter(hasLocation);
+    for (const s of located) {
+      const active = s.id === focusId;
+      const muted = !!focusId && !active;
+      window.L.marker([s.lat, s.lng], {
+        icon: pinIcon(s, { active, muted }),
+        title: `${s.title} — Deal Score ${s.dealScore}`,
+        // Higher scores draw on top, so the best deals stay visible where pins overlap.
+        zIndexOffset: active ? 5000 : Math.round(s.dealScore || 0) * 10 - (muted ? 2000 : 0),
+        riseOnHover: true,
+      }).bindPopup(() => popup(s)).addTo(pins);
+    }
+
+    const focus = focusId && located.find((s) => s.id === focusId);
+    if (focus) map.setView([focus.lat, focus.lng], 15);
+    else if (located.length) {
+      map.fitBounds(window.L.latLngBounds(located.map((s) => [s.lat, s.lng])), { padding: [32, 32], maxZoom: 15 });
+    } else map.setView(DEFAULT_VIEW.center, DEFAULT_VIEW.zoom);
+  }
+
+  function setListings(listings, { focusId = null } = {}) {
+    latest = { listings, focusId };
+    if (!window.L) return unavailable();
+    // Leaflet measures its container, so wait until the node is in the page.
+    if (!scheduled) {
+      scheduled = true;
+      requestAnimationFrame(draw);
+    }
+  }
+
+  return { node, setListings };
+}
+
 /* ===== assets/js/components/header.js ===== */
 // Top navigation bar, rendered once into #app-header.
 
@@ -1371,9 +1509,10 @@ function listingCard(scored) {
 }
 
 /* ===== assets/js/components/filters.js ===== */
-// Filter + sort bar for the browse page. Pure UI: it reads the current filter
-// state and calls onChange with a new state object. The page owns the state
-// and the URL sync.
+// Filter + sort bar for the browse page. Pure UI: it renders from the filter
+// state and calls onChange with a PATCH of only the fields that changed. The
+// page owns the state (and merges patches into its current copy) plus the URL
+// sync — the bar isn't re-rendered on every change, so it must not hold state.
 
 
 
@@ -1389,7 +1528,7 @@ function select(label, value, options, onChange) {
 }
 
 function filterBar(state, derived, onChange) {
-  const set = (patch) => onChange({ ...state, ...patch });
+  const set = (patch) => onChange(patch);
 
   const cityOpts = [{ value: '', label: 'All boroughs' },
     ...derived.cities.map((c) => ({ value: c.slug, label: c.name }))];
@@ -1439,8 +1578,12 @@ function filterBar(state, derived, onChange) {
 }
 
 /* ===== assets/js/pages/home.js ===== */
-// Browse page — filter, sort, and the scored listing grid. This is where the
-// Deal Score does its work: by default we sort best-deal-first.
+// Browse page — filter, sort, and the scored listing grid (or map). This is
+// where the Deal Score does its work: by default we sort best-deal-first.
+//
+// The filter bar and the results are rendered separately: changing a filter
+// only re-renders the results, so a text field keeps focus while you type and
+// the map keeps its tiles while the pins update.
 
 
 
@@ -1454,6 +1597,7 @@ function stateFromQuery(q) {
   return {
     city: q.city || '', neighborhood: q.neighborhood || '', beds: q.beds || '',
     maxRent: q.maxRent || '', laundry: q.laundry === '1', sort: q.sort || 'deal',
+    view: q.view === 'map' ? 'map' : 'grid',
   };
 }
 
@@ -1465,6 +1609,7 @@ function stateToHash(s) {
   if (s.maxRent) p.set('maxRent', s.maxRent);
   if (s.laundry) p.set('laundry', '1');
   if (s.sort && s.sort !== 'deal') p.set('sort', s.sort);
+  if (s.view === 'map') p.set('view', 'map');
   const qs = p.toString();
   return '#/' + (qs ? '?' + qs : '');
 }
@@ -1525,41 +1670,91 @@ function marketSummary(list) {
   ]);
 }
 
+function viewToggle(view, onChange) {
+  const btn = (value, label) => el('button', {
+    type: 'button',
+    'aria-pressed': String(view === value),
+    class: 'rounded-md px-3 py-1.5 text-sm font-medium ' +
+      (view === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'),
+    onClick: () => onChange(value),
+  }, label);
+  return el('div', { class: 'inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1', role: 'group', 'aria-label': 'View' }, [
+    btn('grid', 'Grid'), btn('map', 'Map'),
+  ]);
+}
+
 async function homePage(root, ctx) {
   const all = scoreAll(await getListings());
   let state = stateFromQuery(ctx.query);
+  let map = null; // created when the map view opens, reused while it stays open
 
-  function render() {
-    const derived = deriveOptions(all, state);
-    const filtered = sortListings(applyFilters(all, state), state.sort);
+  const filtersSlot = el('div');
+  const summarySlot = el('div', { class: 'my-4' });
+  const toolbarSlot = el('div', { class: 'mb-3 flex items-center justify-between gap-3' });
+  const mapSlot = el('div');
+  const gridSlot = el('div');
 
-    const onChange = (next) => {
-      state = next;
-      // Push to URL so views are shareable; re-render in place.
-      history.replaceState(null, '', stateToHash(state));
-      render();
-    };
-
-    const grid = filtered.length
-      ? el('div', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' }, filtered.map(listingCard))
-      : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
-        'No listings match these filters. Try widening your search.');
-
-    const page = el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
-      el('div', { class: 'mb-5' }, [
-        el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
-        el('p', { class: 'text-sm text-slate-500' },
-          'Every listing is scored against comparable units nearby — sorted best deal first.'),
-      ]),
-      filterBar(state, derived, onChange),
-      el('div', { class: 'my-4' }, [marketSummary(filtered)]),
-      el('div', { class: 'mb-2 text-sm text-slate-500' }, `${filtered.length} listing${filtered.length === 1 ? '' : 's'}`),
-      grid,
-    ]);
-    mount(root, page);
+  function update(next) {
+    const cityChanged = next.city !== state.city;
+    state = next;
+    // Keep the URL shareable without triggering a route change.
+    history.replaceState(null, '', stateToHash(state));
+    if (cityChanged) renderFilters(); // neighborhood options depend on the borough
+    renderResults();
   }
 
-  render();
+  function renderFilters() {
+    mount(filtersSlot, filterBar(state, deriveOptions(all, state), (patch) => update({ ...state, ...patch })));
+  }
+
+  function renderResults() {
+    const filtered = sortListings(applyFilters(all, state), state.sort);
+
+    const summary = marketSummary(filtered);
+    if (summary) mount(summarySlot, summary);
+    else summarySlot.innerHTML = '';
+
+    const unmapped = filtered.filter((l) => !hasLocation(l)).length;
+    mount(toolbarSlot, el('div', { class: 'flex w-full items-center justify-between gap-3' }, [
+      el('div', { class: 'text-sm text-slate-500' }, [
+        `${filtered.length} listing${filtered.length === 1 ? '' : 's'}`,
+        state.view === 'map' && unmapped
+          ? el('span', { class: 'text-slate-400' }, ` · ${unmapped} without a location not shown on the map`)
+          : null,
+      ]),
+      viewToggle(state.view, (view) => update({ ...state, view })),
+    ]));
+
+    if (state.view === 'map') {
+      if (!map) map = listingsMap({ heightClass: 'h-[26rem] sm:h-[32rem]' });
+      if (!mapSlot.firstChild) mount(mapSlot, el('div', { class: 'mb-4' }, [map.node]));
+      map.setListings(filtered);
+    } else {
+      // Drop the map; a fresh one is built if the user switches back.
+      mapSlot.innerHTML = '';
+      map = null;
+    }
+
+    mount(gridSlot, filtered.length
+      ? el('div', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' }, filtered.map(listingCard))
+      : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
+        'No listings match these filters. Try widening your search.'));
+  }
+
+  mount(root, el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
+    el('div', { class: 'mb-5' }, [
+      el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
+      el('p', { class: 'text-sm text-slate-500' },
+        'Every listing is scored against comparable units nearby — sorted best deal first.'),
+    ]),
+    filtersSlot,
+    summarySlot,
+    toolbarSlot,
+    mapSlot,
+    gridSlot,
+  ]));
+  renderFilters();
+  renderResults();
 }
 
 /* ===== assets/js/pages/listing.js ===== */
@@ -1658,9 +1853,14 @@ async function listingPage(root, ctx) {
     ]));
     return;
   }
-  const s = scoreListing(raw, all);
+  // Score everything so the location map can show neighbors' scores too.
+  const scored = scoreAll(all);
+  const s = scored.find((l) => l.id === raw.id);
   const t = toneOf(s.grade);
   const accent = HERO_ACCENT[s.accent] || HERO_ACCENT.sky;
+  const externalUrl = s.url ? httpUrl(s.url) : null;
+  const areaHash = `#/?city=${encodeURIComponent(s.citySlug)}&neighborhood=${encodeURIComponent(s.neighborhoodSlug)}`;
+  const locMap = hasLocation(s) ? listingsMap({ heightClass: 'h-64' }) : null;
 
   const savingsBanner = s.monthlySavings != null
     ? el('div', {
@@ -1669,7 +1869,7 @@ async function listingPage(root, ctx) {
           : s.monthlySavings < -30 ? 'bg-rose-50 text-rose-700' : 'bg-slate-50 text-slate-600'),
     },
     s.monthlySavings > 30
-      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedsLong(s.beds).toLowerCase()} in this area (~${money(s.monthlySavings * 12)}/yr).`
+      ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo below the typical ${bedLabel(s.beds)} in this area (~${money(s.monthlySavings * 12)}/yr).`
       : s.monthlySavings < -30
         ? `Priced about ${money(Math.abs(s.monthlySavings))}/mo above the typical comparable unit.`
         : 'Priced right around the typical comparable unit.')
@@ -1717,6 +1917,10 @@ async function listingPage(root, ctx) {
         (s.utilitiesIncluded || []).length
           ? el('div', { class: 'mt-2 text-sm text-slate-600' }, `Utilities included: ${s.utilitiesIncluded.map(titleize).join(', ')}`)
           : null,
+        locMap ? el('h2', { class: 'mt-6 text-lg font-bold text-slate-900' }, 'Location') : null,
+        locMap ? el('div', { class: 'mt-2' }, [locMap.node]) : null,
+        locMap ? el('p', { class: 'mt-1 text-xs text-slate-400' },
+          `Pins show Deal Scores. Other ${s.city} listings are faded; click one to compare.`) : null,
       ]),
 
       // Score sidebar
@@ -1736,17 +1940,19 @@ async function listingPage(root, ctx) {
           el('div', { class: 'text-xs text-slate-400' }, 'Typical rent for a comparable unit'),
           el('div', { class: 'text-xl font-bold text-slate-900' }, s.fairRent != null ? `${money(s.fairRent)}/mo` : '—'),
           anchorExplainer(s),
-          s.url
-            ? el('a', { href: s.url, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
-            : el('button', {
-              class: 'mt-3 block w-full rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white',
-              onClick: () => navigate('#/'),
-            }, 'See more in this area'),
+          externalUrl
+            ? el('a', { href: externalUrl, target: '_blank', rel: 'noopener', class: 'mt-3 block rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-semibold text-white' }, 'View original listing')
+            : null,
+          el('a', {
+            href: areaHash,
+            class: 'mt-2 block rounded-lg border border-slate-300 px-4 py-2 text-center text-sm font-semibold text-slate-800 hover:bg-slate-50',
+          }, `More in ${s.neighborhood}`),
         ]),
       ]),
     ]),
   ]);
   mount(root, page);
+  if (locMap) locMap.setListings(scored.filter((l) => l.citySlug === s.citySlug), { focusId: s.id });
 }
 
 /* ===== assets/js/pages/methodology.js ===== */
@@ -1870,6 +2076,8 @@ function addPage(root) {
     const form = el('form', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
       field('Title', input('title', { required: 'required', placeholder: 'Sunny Astoria 1BR' })),
       field('Street address', input('address', { placeholder: '30-14 31st St' })),
+      field('Latitude (optional, for the map)', input('lat', { type: 'number', step: 'any', min: '-90', max: '90', placeholder: '40.7679' })),
+      field('Longitude (optional, for the map)', input('lng', { type: 'number', step: 'any', min: '-180', max: '180', placeholder: '-73.9205' })),
       field('Borough / city', input('city', { required: 'required', placeholder: 'Queens' })),
       field('Neighborhood', input('neighborhood', { required: 'required', placeholder: 'Astoria' })),
       field('Monthly rent ($)', input('rent', { type: 'number', required: 'required', min: '0', step: '25' })),
@@ -1927,6 +2135,13 @@ function addPage(root) {
         amenities,
         accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
       };
+      // Coordinates are optional; keep them only as a valid pair.
+      const lat = parseFloat(fd.get('lat'));
+      const lng = parseFloat(fd.get('lng'));
+      if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        listing.lat = lat;
+        listing.lng = lng;
+      }
       addUserListing(listing);
       invalidate();
       render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.`);

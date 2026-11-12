@@ -34,6 +34,8 @@ export function addPage(root) {
     const form = el('form', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2' }, [
       field('Title', input('title', { required: 'required', placeholder: 'Sunny Astoria 1BR' })),
       field('Street address', input('address', { placeholder: '30-14 31st St' })),
+      field('Latitude (optional, for the map)', input('lat', { type: 'number', step: 'any', min: '-90', max: '90', placeholder: '40.7679' })),
+      field('Longitude (optional, for the map)', input('lng', { type: 'number', step: 'any', min: '-180', max: '180', placeholder: '-73.9205' })),
       field('Borough / city', input('city', { required: 'required', placeholder: 'Queens' })),
       field('Neighborhood', input('neighborhood', { required: 'required', placeholder: 'Astoria' })),
       field('Monthly rent ($)', input('rent', { type: 'number', required: 'required', min: '0', step: '25' })),
@@ -91,6 +93,13 @@ export function addPage(root) {
         amenities,
         accent: ACCENTS[Math.floor(Math.random() * ACCENTS.length)],
       };
+      // Coordinates are optional; keep them only as a valid pair.
+      const lat = parseFloat(fd.get('lat'));
+      const lng = parseFloat(fd.get('lng'));
+      if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+        listing.lat = lat;
+        listing.lng = lng;
+      }
       addUserListing(listing);
       invalidate();
       render(`Saved "${listing.title}" (${money(listing.rent)}/mo). It's now live in Browse.`);
