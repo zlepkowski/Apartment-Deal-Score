@@ -39,8 +39,8 @@ function pinIcon(s, { active, muted }) {
   return window.L.divIcon({
     className: 'ds-pin-wrap',
     html: `<span class="${cls}">${Math.round(Number(s.dealScore) || 0)}</span>`,
-    iconSize: [34, 22],
-    iconAnchor: [17, 11],
+    iconSize: [36, 24],
+    iconAnchor: [18, 12],
     popupAnchor: [0, -12],
   });
 }
@@ -53,8 +53,8 @@ function popup(s) {
       onError: (e) => e.target.remove(),
     }) : null,
     el('div', { class: 'text-sm font-bold text-slate-900' }, `${money(s.rent)}/mo · ${beds(s.beds)}`),
-    el('div', { class: 'truncate text-xs text-slate-700' }, s.title),
-    el('div', { class: 'text-xs text-slate-500' }, `${s.neighborhood} · Deal Score ${s.dealScore} · ${s.grade.label}`),
+    el('div', { class: 'truncate text-xs text-slate-800' }, s.title),
+    el('div', { class: 'text-xs text-slate-600' }, `${s.neighborhood} · Deal Score ${s.dealScore} · ${s.grade.label}`),
   ]);
 }
 

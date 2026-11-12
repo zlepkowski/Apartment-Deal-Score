@@ -6,3 +6,8 @@ node_modules/
 .env
 .env.local
 build/
+
+# Raw StreetEasy Data Dashboard downloads stay out of this public repo; only
+# the generated assets/js/data/market.js (latest month) is committed.
+data/streeteasy/*
+!data/streeteasy/README.md

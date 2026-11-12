@@ -5,6 +5,7 @@
 
 import { el } from '../util/dom.js';
 import { photoUrls } from '../util/format.js';
+import { icon } from './icons.js';
 
 export function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
   const urls = photoUrls(listing);
@@ -30,33 +31,38 @@ export function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
     'aria-label': `Photos of ${listing.title}`,
   }, slides);
 
-  const counter = el('div', { class: 'absolute right-3 top-3 rounded-full bg-black/60 px-2.5 py-0.5 text-xs font-medium text-white tabular-nums' });
+  const counter = el('div', { class: 'num absolute right-3 top-3 rounded-full bg-slate-900/75 px-2.5 py-0.5 text-xs font-medium text-white', 'aria-hidden': 'true' });
+  // Each dot is an 8px mark inside a 24px button, so the hit area meets the
+  // minimum target size without changing how it looks.
+  const dotMarks = urls.map(() => el('span', { class: 'block h-2 w-2 rounded-full bg-white/60', 'aria-hidden': 'true' }));
   const dots = urls.map((_, i) => el('button', {
     type: 'button',
     'aria-label': `Show photo ${i + 1}`,
-    class: 'h-2 w-2 rounded-full bg-white/60 transition',
+    class: 'grid h-6 w-6 place-items-center rounded-full',
     onClick: () => go(i),
-  }));
+  }, [dotMarks[i]]));
 
-  const arrow = (dir, label, glyph) => el('button', {
+  const arrow = (dir, label, iconName) => el('button', {
     type: 'button',
     'aria-label': label,
-    class: `absolute top-1/2 ${dir < 0 ? 'left-3' : 'right-3'} grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/85 text-lg font-bold text-slate-800 shadow hover:bg-white disabled:opacity-0`,
+    class: `absolute top-1/2 ${dir < 0 ? 'left-3' : 'right-3'} grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-slate-900 shadow hover:bg-white disabled:invisible`,
     onClick: () => go(index + dir),
-  }, glyph);
-  const prev = arrow(-1, 'Previous photo', '‹');
-  const next = arrow(1, 'Next photo', '›');
+  }, [icon(iconName, { size: 20 })]);
+  const prev = arrow(-1, 'Previous photo', 'chevron-left');
+  const next = arrow(1, 'Next photo', 'chevron-right');
 
   function sync() {
     counter.textContent = `${index + 1} / ${n}`;
-    dots.forEach((d, i) => { d.className = `h-2 w-2 rounded-full transition ${i === index ? 'bg-white' : 'bg-white/60'}`; });
+    dotMarks.forEach((d, i) => { d.className = `block h-2 w-2 rounded-full ${i === index ? 'bg-white' : 'bg-white/60'}`; });
+    dots.forEach((d, i) => d.setAttribute('aria-current', i === index ? 'true' : 'false'));
     prev.disabled = index === 0;
     next.disabled = index === n - 1;
   }
 
   function go(i) {
     const target = Math.max(0, Math.min(n - 1, i));
-    track.scrollTo({ left: target * track.clientWidth, behavior: 'smooth' });
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    track.scrollTo({ left: target * track.clientWidth, behavior: reduce ? 'auto' : 'smooth' });
   }
 
   // The scroll position is the source of truth (swipes and buttons both land here).
@@ -80,6 +86,6 @@ export function photoGallery(listing, { heightClass = 'h-64 sm:h-96' } = {}) {
     n > 1 ? prev : null,
     n > 1 ? next : null,
     n > 1 ? counter : null,
-    n > 1 ? el('div', { class: 'absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/30 px-2 py-1.5' }, dots) : null,
+    n > 1 ? el('div', { class: 'absolute bottom-2 left-1/2 flex -translate-x-1/2 rounded-full bg-slate-900/40 px-1' }, dots) : null,
   ]);
 }

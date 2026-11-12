@@ -1,61 +1,57 @@
 # DealScore — NYC Apartments
 
 An apartment-hunting site for New York City with one twist: every listing gets a
-**Deal Score** (0–100) rating how good a value it is versus *comparable* units in
-the same neighborhood and borough. Sort by best deal, see exactly why each unit
-scored the way it did, and browse on a list or a map.
+**Deal Score** (0–100) rating how good a deal it is. Its price is compared with
+**StreetEasy's median asking rent** for the same neighborhood and size, and the
+rest of the score comes from what the apartment offers. Sort by best deal, see
+exactly why each unit scored the way it did, and browse on a list or a map.
 
 Built as a static single-page app: no backend, no `npm install`, no signup, no
-tracking. Host it free on GitHub Pages today and wire it to a real database when
-you're ready.
+tracking. DealScore is not affiliated with StreetEasy.
 
-## What makes it different
+## The Deal Score
 
-Most listing sites just let you sort by price. DealScore answers *"how much
-apartment am I getting for the money, relative to what else is out there?"*
-It uses the comparable-based ("rent comp") analysis professionals use, made
-automatic and renter-facing.
-
-## The Deal Score (100 points)
-
-| Component | Max | What it measures |
+| Component | Points | What it measures |
 |---|---|---|
-| **Price vs. comparable units** | 50 | Rent per square foot vs. the *typical* $/sqft for a comparable unit (see below). At typical = 25; 25% cheaper = 50. The single biggest factor. |
-| **Amenity richness** | 22 | Weighted sum of amenities (laundry, parking, A/C and outdoor space weigh most), normalized to the local range. |
-| **In-unit laundry** | 10 | Called out on its own: full marks for an in-unit washer/dryer, half for in-building laundry. |
-| **Space for the size class** | 10 | Square footage vs. other units of the same bedroom count nearby. |
+| **Price vs. StreetEasy median** | 60 | Rent vs. StreetEasy's median asking rent for the same neighborhood and bedroom count (studio, 1, 2, 3+). At the median = 30; 25% below = 60; 25% above = 0. |
+| **Amenity richness** | 22 | Weighted sum of amenities (laundry, parking, A/C and outdoor space weigh most); 45 earns full marks. |
+| **In-unit laundry** | 10 | Full marks for an in-unit washer/dryer, half for in-building laundry. |
 | **Condition & extras** | 8 | Recent renovation or newer build, included utilities, move-in concessions. |
+| **Space bonus** | up to +10 | Only when square footage is listed: 30%+ bigger than a typical NYC unit of that size earns the full bonus. No square footage, or a smaller unit, means no bonus and no penalty. The total is capped at 100. |
 
 Score labels: **80–100** Great Deal · **65–79** Good Deal · **50–64** Fair ·
 **35–49** Below Average · **0–34** Overpriced.
 
-### How "typical rent" is estimated
+### Where the benchmark comes from
 
-In NYC the borough fills the "city" slot of the comp hierarchy. A unit is
-compared with its neighborhood, then its borough, never with the whole city.
-A listing is never its own comparable.
+Typical rents are StreetEasy's monthly median asking rents from its
+[Data Dashboard](https://streeteasy.com/blog/data-dashboard), stored in
+[`assets/js/data/market.js`](assets/js/data/market.js). StreetEasy publishes
+figures for ~176 neighborhoods, the five boroughs and NYC, but not every
+neighborhood × size, so DealScore uses the most specific figure available:
+neighborhood → borough → all of NYC. The level used is shown as a
+confidence label (high / medium / low), and low-confidence savings are flagged
+as rough estimates.
 
-The typical $/sqft blends two estimates:
+Listings match StreetEasy areas by name, so use StreetEasy's neighborhood names
+(the add form suggests them). Common alternatives are understood, e.g.
+"Bed-Stuy" → Bedford-Stuyvesant, "Hell's Kitchen" → Midtown West, "Harlem" →
+Central Harlem.
 
-- **Local:** the median $/sqft of same-size units in the same neighborhood.
-- **Adjusted borough:** the borough median for that size (widening to ±1
-  bedroom, then all sizes, when a size class is thin), scaled by how pricey the
-  neighborhood runs vs. its borough across all of its listings.
+The space bonus compares against typical NYC sizes rounded from
+[RentCafe's listing averages](https://www.rentcafe.com/average-rent-market-trends/us/ny/new-york-city/)
+(StreetEasy doesn't publish sizes): studio ~480 sqft, 1-bed ~700, 2-bed ~960,
+3+ bed ~1,240.
 
-The local figure's weight grows with the number of local comps: one counts 1/3,
-two count 1/2, six count 3/4. A thin neighborhood therefore can't produce wild
-"savings" figures from mixing luxury towers with walk-ups. Each listing shows a
-**high / medium / low** confidence level, and low-confidence savings are flagged
-as rough estimates. The listing page walks through every step of the estimate.
-
-The in-app **How scoring works** page explains all of this in plain language.
 To tune it:
 
 | What | Where |
 |---|---|
-| Component weights, comp-set size | `WEIGHTS` and `MIN_COMPS` in [`assets/js/core/score.js`](assets/js/core/score.js) |
+| Component weights, bonus size | `WEIGHTS` and `SPACE_BONUS_MAX` in [`assets/js/core/score.js`](assets/js/core/score.js) |
 | Price sensitivity | the `0.75 / 1.25` bounds in `scorePrice` |
-| How fast local comps take over | `NBHD_PRIOR` and `LOCATION_PRIOR` in `score.js` |
+| Amenity full marks | `AMENITY_FULL_MARKS` in `score.js` |
+| Typical sizes | `TYPICAL_SQFT` in `score.js` |
+| Neighborhood short forms | `AREA_ALIASES` in `score.js` |
 | Amenity values | `weight` fields in [`assets/js/data/amenities.js`](assets/js/data/amenities.js) |
 
 ## Pages
@@ -66,10 +62,13 @@ To tune it:
   Filters and view are kept in the URL, so any view is shareable.
 - **Listing detail:** a photo gallery (when the listing has photos), unit facts,
   amenities, a location map with nearby listings, the per-component score
-  breakdown, and how the "typical rent" anchor was built.
+  breakdown, and which StreetEasy figure the price was compared with.
 - **How scoring works:** the methodology, in plain language.
-- **Add listing:** a form to enter real listings, including optional
-  coordinates and photo URLs. They're saved in your browser and show up in
+- **Privacy** and **Terms:** drafts written from what the site actually does,
+  with `[[TODO]]` placeholders for owner details. They need review by a lawyer
+  before you rely on them.
+- **Add listing:** a form to enter real listings, with StreetEasy neighborhood
+  suggestions, optional square footage, coordinates and photo URLs. They're saved in your browser and show up in
   Browse right away, tagged "Draft". **Export JSON** copies them out.
 
 ## Run locally
@@ -102,45 +101,65 @@ use Node's built-in runner. Neither step needs `npm install`.
 
 ## Listing data
 
-Listings live in [`assets/js/data/listings.js`](assets/js/data/listings.js). The
-shape is documented at the top of that file:
+There are no bundled listings: the site starts empty and shows only listings
+you add. The shape is documented at the top of
+[`assets/js/data/listings.js`](assets/js/data/listings.js):
 
 ```js
 {
-  id: 'qn-as-004', title: 'Astoria 2BR by the N/W', address: '30-14 31st St',
-  city: 'Queens', citySlug: 'queens',                 // the borough, for NYC
-  neighborhood: 'Astoria', neighborhoodSlug: 'astoria',
+  id: 'user-queens-astoria-1', title: 'Renovated Astoria 1BR', address: '30-14 31st St',
+  city: 'Queens', citySlug: 'queens',                 // the borough
+  neighborhood: 'Astoria', neighborhoodSlug: 'astoria', // StreetEasy's neighborhood name
   lat: 40.7679, lng: -73.9205,                        // optional; needed for the map
-  rent: 3200, sqft: 900, beds: 2, baths: 1,           // beds: 0 = studio
-  yearBuilt: 1935, renovated: false, available: '2026-12-01',
+  rent: 2500, sqft: 820, beds: 1, baths: 1,           // sqft optional; beds: 0 = studio
+  yearBuilt: 1930, renovated: true, available: '2026-12-01',
   petPolicy: 'cats',                                  // 'friendly' | 'cats' | 'none'
   utilitiesIncluded: ['heat', 'hot water'], concession: '',
-  amenities: ['hardwood', 'in_building_laundry'],     // keys from data/amenities.js
+  amenities: ['dishwasher', 'in_building_laundry'],   // keys from data/amenities.js
   images: [],                                         // optional photo URLs; first is the cover
-  accent: 'cyan',                                     // placeholder color when there's no photo
   url: '',                                            // optional external listing URL
 }
 ```
 
-The 70 seed listings cover 13 neighborhoods across Manhattan, Brooklyn, Queens
-and the Bronx at late-2026 rent levels. **They are illustrative, not real units,
-and have no photos.** Replace them before going live.
+Ways to add listings:
 
-### Adding listings (smallest to largest)
-
-1. **In-app form:** open **Add listing**, enter a unit, then use
-   **Export JSON** to copy it into the seed file.
+1. **In-app form:** open **Add listing** and enter a unit. It's saved in your
+   browser; **Export JSON** copies it out.
 2. **Edit the data file:** add objects to `SEED_LISTINGS`, then run
    `node build.mjs`.
-3. **Live backend:** implement `fetchRemoteListings()` in
-   [`assets/js/data/adapter.js`](assets/js/data/adapter.js) to pull from
-   Supabase / Airtable / Firebase / your own API. Every page reads through the
-   adapter, so nothing else changes. A Supabase example is in the file.
+3. **Live source:** implement `fetchRemoteListings()` in
+   [`assets/js/data/adapter.js`](assets/js/data/adapter.js). Every page reads
+   through the adapter, so nothing else changes.
+
+## Data sources roadmap
+
+DealScore is meant to run on StreetEasy data only, in three phases:
+
+1. **StreetEasy market benchmarks (in progress).** Monthly median asking rents
+   per unit size from the Data Dashboard's CSV downloads, converted by
+   `scripts/import-streeteasy.mjs` into `assets/js/data/market.js`. Scoring, UI
+   and importer are done; `market.js` stays empty, and prices unbenchmarked,
+   until the per-size CSVs are imported. Refreshed by hand each month (see
+   [`data/streeteasy/README.md`](data/streeteasy/README.md)): StreetEasy's bot
+   protection blocks automated downloads and its terms forbid scraping, so
+   nothing fetches from StreetEasy automatically. The raw CSVs are git-ignored;
+   only the latest month's figures are committed.
+2. **Your StreetEasy shortlist (planned).** The add form requires a StreetEasy
+   listing link; you type in the facts yourself (the page is never fetched), the
+   listing links back with "View on StreetEasy", and photos stay on StreetEasy.
+   Listings stay private in your browser, with JSON export/import between
+   devices.
+3. **Licensed StreetEasy feed (planned).** Needs a data agreement with
+   StreetEasy / Zillow Group, whose terms decide what can be shown publicly.
+   `fetchRemoteListings()` maps the feed into the listing shape. With real
+   listing volume, listing-vs-listing comparisons (price per square foot, space)
+   can come back alongside StreetEasy's medians.
 
 ## Map
 
-The map uses [Leaflet](https://leafletjs.com/) 1.9.4, loaded from unpkg with a
-pinned integrity hash, and OpenStreetMap's standard tiles. No API key is needed.
+The map uses [Leaflet](https://leafletjs.com/) 1.9.4, self-hosted in
+`assets/vendor/leaflet/` (byte-identical to the release), and OpenStreetMap's
+standard tiles. No API key is needed.
 OSM's tiles are fine for light traffic. For a busy site, switch `TILE_URL` in
 [`assets/js/components/map.js`](assets/js/components/map.js) to a hosted tile
 provider, per the
@@ -155,33 +174,51 @@ Build and deployment → Source: GitHub Actions**.
 ## Project layout
 
 ```
-index.html                  shell: Tailwind (CDN), Leaflet (CDN), dist/dealscore.js
+index.html                  shell: Tailwind (CDN) + token config, skip link, dist/dealscore.js
+CLAUDE.md                   notes for Claude sessions (points at the design guidelines)
+CREDITS.md                  every third-party asset, library and data source, with licenses
+docs/DESIGN_GUIDELINES.md   design, UX, motion and compliance rules
+docs/DESIGN_AUDIT.md        latest audit against those rules, and what needs owner input
 build.mjs                   ~50-line bundler -> dist/dealscore.js
 dist/dealscore.js           generated bundle (committed)
 tests/score.test.mjs        engine tests (node --test)
+scripts/import-streeteasy.mjs  StreetEasy CSVs -> assets/js/data/market.js
+data/streeteasy/            drop StreetEasy downloads here (git-ignored)
 assets/
-  css/styles.css            fonts, background, map pins, gallery
+  css/styles.css            design tokens (colour, radius, shadow, motion), base and
+                            component styles, reduced-motion rules
+  fonts/                    Inter, self-hosted (OFL)
+  vendor/leaflet/           Leaflet 1.9.4 (BSD-2-Clause)
   js/
     main.js                 router bootstrap
     util/                   format (incl. URL guards), stats, dom, router, storage
-    data/                   amenities (catalog + weights), listings (seed), adapter
+    data/                   amenities (catalog + weights), market (StreetEasy medians),
+                            listings (bundled, empty), adapter
     core/score.js           the Deal Score engine
-    components/             header, scoreBadge, listingCard, filters, map, gallery
-    pages/                  home, listing, methodology, add
+    components/             header, icons (Lucide), scoreBadge, listingCard, filters, map, gallery
+    pages/                  home, listing, methodology, add, legal (privacy + terms)
 ```
+
+## Design rules
+
+UI, copy and data-handling changes follow
+[`docs/DESIGN_GUIDELINES.md`](docs/DESIGN_GUIDELINES.md); the latest audit is
+[`docs/DESIGN_AUDIT.md`](docs/DESIGN_AUDIT.md). In short: WCAG 2.2 AA contrast
+and keyboard access, one accent colour (`--accent` in `assets/css/styles.css`,
+available to Tailwind as `bg-accent` / `text-accent`), no emoji as icons, no
+unsupported claims, and `prefers-reduced-motion` respected.
 
 ## Known limitations / next steps
 
 - **The Deal Score is heuristic,** not market-calibrated. With enough real data
-  you could fit the weights (e.g. regress rent on features) instead of setting
-  them by hand.
+  you could fit the weights instead of setting them by hand.
+- **Asking rents, not signed leases.** StreetEasy's medians describe what
+  landlords ask; actual rents can be lower, especially with concessions.
+- **Name matching.** A listing whose neighborhood isn't a StreetEasy name falls
+  back to the borough figure (and says so). Add short forms to `AREA_ALIASES`.
 - **No rent-stabilization data.** It's a major value factor in NYC and a natural
   next field and score input.
-- **Drafts are per-browser.** There's no persistence or auth; the backend
-  adapter is the path to shared, real data.
-- **Size mixing in thin size classes:** when a borough has few units of a size,
-  the estimate widens to neighboring sizes. Studios run pricier per square foot
-  than 1BRs, so expect low-confidence studio scores to skew slightly harsh.
+- **Drafts are per-browser.** There's no persistence or auth yet.
 
 ## License
 

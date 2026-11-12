@@ -1,20 +1,22 @@
 // Methodology page — explains the Deal Score so renters (and you) trust it.
 
 import { el, mount } from '../util/dom.js';
+import { MARKET } from '../data/market.js';
+import { TYPICAL_SQFT, monthLabel } from '../core/score.js';
 
 const COMPONENTS = [
-  ['Price vs. comparable units', 50, 'We compute the listing\'s rent per square foot and compare it to the typical $/sqft of similar units nearby (see "Thin markets" below for how "typical" is worked out). Being right at typical earns half marks; 25% cheaper earns full marks. This is the single biggest factor, just like in professional rent-comp analysis.'],
-  ['Amenity richness', 22, 'Each amenity carries a weight reflecting how much renters typically pay for it (laundry, parking, central A/C and outdoor space move rent the most). A unit\'s total amenity weight is compared to the local range.'],
-  ['In-unit laundry', 10, 'Called out on its own because it\'s one of the most-requested features. In-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
-  ['Space for the size class', 10, 'Square footage compared to other units of the same bedroom count nearby — more room for the same money scores higher.'],
-  ['Condition & extras', 8, 'Recent renovation or newer construction, included utilities, and move-in concessions each add points.'],
+  ['Price vs. StreetEasy median', '60 pts', 'The listing\'s rent compared with StreetEasy\'s median asking rent for the same neighborhood and bedroom count (studio, 1, 2, or 3+ beds). Right at the median earns half marks; 25% below earns full marks; 25% above earns none. This is the single biggest factor.'],
+  ['Amenity richness', '22 pts', 'Each amenity has a hand-set weight; in-unit laundry, parking, central A/C, dishwashers and outdoor space weigh the most. The weights are a judgment call, not fitted to rent data. An apartment with most of them, such as a doorman building with in-unit laundry, earns full marks.'],
+  ['In-unit laundry', '10 pts', 'Scored on its own, on top of the amenity score, so laundry counts extra. An in-unit washer/dryer earns full marks; shared in-building laundry earns half.'],
+  ['Condition & extras', '8 pts', 'Recent renovation or newer construction, included utilities, and move-in concessions each add points.'],
+  ['Space bonus', 'up to +10', 'Only when the listing gives its square footage. A unit 30% or more bigger than a typical NYC apartment of its size earns the full bonus. Smaller units, and listings without square footage, simply get no bonus. The total is capped at 100.'],
 ];
 
-function row([label, max, desc]) {
+function row([label, pts, desc]) {
   return el('div', { class: 'border-t border-slate-100 py-4' }, [
-    el('div', { class: 'flex items-baseline justify-between' }, [
+    el('div', { class: 'flex items-baseline justify-between gap-3' }, [
       el('div', { class: 'font-semibold text-slate-800' }, label),
-      el('div', { class: 'rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-bold text-emerald-700' }, `${max} pts`),
+      el('div', { class: 'num whitespace-nowrap rounded-full bg-accent-soft px-2.5 py-0.5 text-sm font-bold text-accent' }, pts),
     ]),
     el('p', { class: 'mt-1 text-sm text-slate-600' }, desc),
   ]);
@@ -26,21 +28,24 @@ function gradeChip(label, range, cls) {
   ]);
 }
 
+const methodCard = (children) => el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, children);
+const methodPara = (text) => el('p', { class: 'mt-1 text-sm text-slate-600' }, text);
+const methodLink = (href, text) => el('a', { href, target: '_blank', rel: 'noopener', class: 'text-accent underline' }, text);
+
 export function methodologyPage(root) {
   const page = el('div', { class: 'mx-auto max-w-3xl px-4 py-8' }, [
     el('h1', { class: 'text-3xl font-extrabold tracking-tight text-slate-900' }, 'How the Deal Score works'),
     el('p', { class: 'mt-2 text-slate-600' },
-      'The Deal Score is a 0–100 rating of how much apartment you get for the price, ' +
-      'compared to similar units in the same neighborhood and borough. It\'s comparable-based — ' +
-      'the same approach professional analysts use to price rentals — so it stays meaningful ' +
-      'as you add more listings to each market.'),
+      'The Deal Score is a 0–100 rating of how good a deal an apartment is. Its price is compared with ' +
+      'what similar apartments in the same neighborhood are asking, using StreetEasy\'s published market data, ' +
+      'and the rest of the score comes from what the apartment itself offers.'),
 
-    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
-      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'The five components (100 points)'),
+    methodCard([
+      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'The components'),
       ...COMPONENTS.map(row),
     ]),
 
-    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
+    methodCard([
       el('h2', { class: 'mb-3 text-lg font-bold text-slate-900' }, 'How scores map to labels'),
       el('div', { class: 'grid grid-cols-1 gap-2 sm:grid-cols-2' }, [
         gradeChip('Great Deal', '80–100', 'bg-emerald-50 text-emerald-700'),
@@ -51,34 +56,29 @@ export function methodologyPage(root) {
       ]),
     ]),
 
-    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
-      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'The comp set'),
-      el('p', { class: 'mt-1 text-sm text-slate-600' },
-        'For amenities and space, each listing is compared with the tightest set of other ' +
-        'listings that has enough data: same neighborhood + bedroom count, then same borough + ' +
-        'bedroom count, then the whole borough. A listing is never counted as its own comparable. ' +
-        'The detail page shows which set was used and how many listings it contained.'),
+    methodCard([
+      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'Where the benchmark comes from'),
+      methodPara([
+        'Typical rents are StreetEasy\'s median asking rents from its ',
+        methodLink(MARKET.sourceUrl, 'Data Dashboard'),
+        MARKET.asOf ? ` (currently ${monthLabel(MARKET.asOf)}), refreshed monthly.` : '. They haven\'t been imported yet.',
+      ]),
+      methodPara('StreetEasy doesn\'t publish a figure for every neighborhood and size, so DealScore uses the most ' +
+        'specific one available: the neighborhood first, then the wider area it belongs to, then the borough, ' +
+        'then all of NYC. Each listing shows which level it used as a confidence label: high for a ' +
+        'neighborhood figure, medium for a wider area, low for a borough or citywide figure. Low-confidence ' +
+        'savings are flagged as rough estimates.'),
     ]),
 
-    el('div', { class: 'mt-6 rounded-2xl border border-slate-200 bg-white p-5' }, [
-      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'Thin markets: how "typical rent" is estimated'),
-      el('p', { class: 'mt-1 text-sm text-slate-600' },
-        'A neighborhood with only one or two listings of a given size can\'t say much on its own, ' +
-        'and the borough as a whole mixes luxury towers with walk-ups. So the typical $/sqft blends two estimates:'),
-      el('ul', { class: 'mt-2 list-disc space-y-1 pl-5 text-sm text-slate-600' }, [
-        el('li', {}, 'Local: the median $/sqft of same-size units in the same neighborhood.'),
-        el('li', {}, 'Adjusted borough: the borough-wide median for that size, scaled by how pricey the ' +
-          'neighborhood runs compared with its borough across all its listings.'),
-      ]),
-      el('p', { class: 'mt-2 text-sm text-slate-600' },
-        'The more local comps there are, the more the local figure counts: one comp is weighted ' +
-        'one-third, two are half, six are three-quarters. Each listing shows a confidence level: high ' +
-        'with 3+ local comps, medium with at least one local comp or a full size class in the borough, ' +
-        'low otherwise. Low-confidence savings are flagged as rough estimates. Adding real listings ' +
-        'per neighborhood is what sharpens every score.'),
+    methodCard([
+      el('h2', { class: 'text-lg font-bold text-slate-900' }, 'Typical sizes for the space bonus'),
+      methodPara('StreetEasy doesn\'t publish apartment sizes, so the space bonus compares against typical NYC sizes ' +
+        `rounded from RentCafe's listing averages: studio ~${TYPICAL_SQFT[0]} sqft, 1-bed ~${TYPICAL_SQFT[1]}, ` +
+        `2-bed ~${TYPICAL_SQFT[2]}, 3+ bed ~${TYPICAL_SQFT[3]}.`),
     ]),
-    el('p', { class: 'mt-6 text-xs text-slate-400' },
-      'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js.'),
+
+    el('p', { class: 'mt-6 text-xs text-slate-600' },
+      'Weights are tunable in assets/js/core/score.js and assets/js/data/amenities.js. DealScore is not affiliated with StreetEasy.'),
   ]);
   mount(root, page);
 }

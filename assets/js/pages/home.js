@@ -9,7 +9,8 @@ import { el, mount } from '../util/dom.js';
 import { money, num, ppsf } from '../util/format.js';
 import { median } from '../util/stats.js';
 import { getListings } from '../data/adapter.js';
-import { scoreAll } from '../core/score.js';
+import { scoreAll, monthLabel } from '../core/score.js';
+import { MARKET } from '../data/market.js';
 import { filterBar } from '../components/filters.js';
 import { listingCard } from '../components/listingCard.js';
 import { listingsMap, hasLocation } from '../components/map.js';
@@ -68,7 +69,8 @@ function sortListings(list, sort) {
     deal: (a, b) => b.dealScore - a.dealScore,
     price_asc: (a, b) => a.rent - b.rent,
     price_desc: (a, b) => b.rent - a.rent,
-    ppsf_asc: (a, b) => ppsf(a.rent, a.sqft) - ppsf(b.rent, b.sqft),
+    // Listings without square footage sort last.
+    ppsf_asc: (a, b) => (ppsf(a.rent, a.sqft) ?? Infinity) - (ppsf(b.rent, b.sqft) ?? Infinity),
     savings: (a, b) => (b.monthlySavings ?? -1e9) - (a.monthlySavings ?? -1e9),
   };
   return [...list].sort(by[sort] || by.deal);
@@ -80,14 +82,13 @@ function marketSummary(list) {
   const medRent = median(list.map((l) => l.rent));
   const greatDeals = list.filter((l) => l.dealScore >= 80).length;
   const stat = (label, value) => el('div', {}, [
-    el('div', { class: 'text-xs uppercase tracking-wide text-slate-400' }, label),
-    el('div', { class: 'text-lg font-bold text-slate-900' }, value),
+    el('dt', { class: 'text-xs font-medium text-slate-600' }, label),
+    el('dd', { class: 'num text-lg font-bold text-slate-900' }, value),
   ]);
-  return el('div', { class: 'grid grid-cols-2 gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-4' }, [
-    stat('Listings', num(list.length)),
+  return el('dl', { class: 'flex flex-wrap gap-x-10 gap-y-3' }, [
     stat('Median rent', money(medRent)),
-    stat('Median $/sqft', med ? '$' + med.toFixed(2) : '—'),
-    stat('Great deals', `${greatDeals}`),
+    med ? stat('Median $/sqft', '$' + med.toFixed(2)) : null,
+    stat('Great deals (80+)', num(greatDeals)),
   ]);
 }
 
@@ -95,8 +96,8 @@ function viewToggle(view, onChange) {
   const btn = (value, label) => el('button', {
     type: 'button',
     'aria-pressed': String(view === value),
-    class: 'rounded-md px-3 py-1.5 text-sm font-medium ' +
-      (view === value ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'),
+    class: 'rounded px-3 py-1.5 text-sm font-medium ' +
+      (view === value ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'),
     onClick: () => onChange(value),
   }, label);
   return el('div', { class: 'inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1', role: 'group', 'aria-label': 'View' }, [
@@ -108,9 +109,10 @@ export async function homePage(root, ctx) {
   const all = scoreAll(await getListings());
   let state = stateFromQuery(ctx.query);
   let map = null; // created when the map view opens, reused while it stays open
+  let firstReveal = true; // stagger the cards in once, not on every filter change
 
   const filtersSlot = el('div');
-  const summarySlot = el('div', { class: 'my-4' });
+  const summarySlot = el('div', { class: 'mt-6 mb-4' });
   const toolbarSlot = el('div', { class: 'mb-3 flex items-center justify-between gap-3' });
   const mapSlot = el('div');
   const gridSlot = el('div');
@@ -137,10 +139,10 @@ export async function homePage(root, ctx) {
 
     const unmapped = filtered.filter((l) => !hasLocation(l)).length;
     mount(toolbarSlot, el('div', { class: 'flex w-full items-center justify-between gap-3' }, [
-      el('div', { class: 'text-sm text-slate-500' }, [
+      el('p', { class: 'num text-sm text-slate-600', role: 'status' }, [
         `${filtered.length} listing${filtered.length === 1 ? '' : 's'}`,
         state.view === 'map' && unmapped
-          ? el('span', { class: 'text-slate-400' }, ` · ${unmapped} without a location not shown on the map`)
+          ? ` · ${unmapped} without a location not shown on the map`
           : null,
       ]),
       viewToggle(state.view, (view) => update({ ...state, view })),
@@ -156,17 +158,30 @@ export async function homePage(root, ctx) {
       map = null;
     }
 
+    const enter = firstReveal;
+    firstReveal = false;
     mount(gridSlot, filtered.length
-      ? el('div', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3' }, filtered.map(listingCard))
-      : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-500' },
-        'No listings match these filters. Try widening your search.'));
+      ? el('ul', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', 'aria-label': 'Listings' },
+        filtered.map((s, index) => el('li', {}, [listingCard(s, { enter, index })])))
+      : all.length
+        ? el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-600' },
+          'No listings match these filters. Try widening your search.')
+        : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center' }, [
+          el('h2', { class: 'font-semibold text-slate-900' }, 'No listings yet'),
+          el('p', { class: 'mt-1 text-sm text-slate-600' },
+            'Add an apartment you\'re considering to see how its rent compares with StreetEasy\'s median for the neighborhood.'),
+          el('a', { href: '#/add', class: 'mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover' }, 'Add a listing'),
+        ]));
   }
 
   mount(root, el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
     el('div', { class: 'mb-5' }, [
-      el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'Find the best-value apartments in New York'),
-      el('p', { class: 'text-sm text-slate-500' },
-        'Every listing is scored against comparable units nearby — sorted best deal first.'),
+      el('h1', { class: 'text-2xl font-extrabold tracking-tight text-slate-900' }, 'How good a deal is that NYC apartment?'),
+      el('p', { class: 'mt-1 max-w-prose text-sm text-slate-700' },
+        'Each apartment you add gets a Deal Score from 0 to 100, led by how its rent compares with StreetEasy\'s median asking rent for the same neighborhood and size. Best deals first.'),
+      el('p', { class: 'mt-1 text-xs text-slate-600' }, MARKET.asOf
+        ? [`Market data: `, el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-900' }, 'StreetEasy'), `, ${monthLabel(MARKET.asOf)}.`]
+        : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
     ]),
     filtersSlot,
     summarySlot,
