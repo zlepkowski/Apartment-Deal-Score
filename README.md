@@ -26,15 +26,17 @@ Score labels: **80–100** Great Deal · **65–79** Good Deal · **50–64** Fa
 
 Typical rents are StreetEasy's monthly median asking rents from its
 [Data Dashboard](https://streeteasy.com/blog/data-dashboard), stored in
-[`assets/js/data/market.js`](assets/js/data/market.js). StreetEasy doesn't publish
-every neighborhood × size, so DealScore uses the most specific figure available:
-neighborhood → wider area → borough → all of NYC. The level used is shown as a
+[`assets/js/data/market.js`](assets/js/data/market.js). StreetEasy publishes
+figures for ~176 neighborhoods, the five boroughs and NYC, but not every
+neighborhood × size, so DealScore uses the most specific figure available:
+neighborhood → borough → all of NYC. The level used is shown as a
 confidence label (high / medium / low), and low-confidence savings are flagged
 as rough estimates.
 
 Listings match StreetEasy areas by name, so use StreetEasy's neighborhood names
-(the add form suggests them). A few short forms are understood, e.g. "Bed-Stuy"
-→ "Bedford-Stuyvesant".
+(the add form suggests them). Common alternatives are understood, e.g.
+"Bed-Stuy" → Bedford-Stuyvesant, "Hell's Kitchen" → Midtown West, "Harlem" →
+Central Harlem.
 
 The space bonus compares against typical NYC sizes rounded from
 [RentCafe's listing averages](https://www.rentcafe.com/average-rent-market-trends/us/ny/new-york-city/)
@@ -132,12 +134,14 @@ Ways to add listings:
 DealScore is meant to run on StreetEasy data only, in three phases:
 
 1. **StreetEasy market benchmarks (in progress).** Monthly median asking rents
-   from the Data Dashboard's CSV downloads, committed under `data/streeteasy/`
-   and converted into `assets/js/data/market.js`. The scoring and UI are done;
-   the importer lands with the first CSV drop, and until then `market.js` is
-   empty and prices aren't benchmarked. Refreshed by hand each month:
-   StreetEasy's bot protection blocks automated downloads, and its terms forbid
-   scraping, so nothing fetches from StreetEasy automatically.
+   per unit size from the Data Dashboard's CSV downloads, converted by
+   `scripts/import-streeteasy.mjs` into `assets/js/data/market.js`. Scoring, UI
+   and importer are done; `market.js` stays empty, and prices unbenchmarked,
+   until the per-size CSVs are imported. Refreshed by hand each month (see
+   [`data/streeteasy/README.md`](data/streeteasy/README.md)): StreetEasy's bot
+   protection blocks automated downloads and its terms forbid scraping, so
+   nothing fetches from StreetEasy automatically. The raw CSVs are git-ignored;
+   only the latest month's figures are committed.
 2. **Your StreetEasy shortlist (planned).** The add form requires a StreetEasy
    listing link; you type in the facts yourself (the page is never fetched), the
    listing links back with "View on StreetEasy", and photos stay on StreetEasy.
@@ -171,6 +175,8 @@ index.html                  shell: Tailwind (CDN), Leaflet (CDN), dist/dealscore
 build.mjs                   ~50-line bundler -> dist/dealscore.js
 dist/dealscore.js           generated bundle (committed)
 tests/score.test.mjs        engine tests (node --test)
+scripts/import-streeteasy.mjs  StreetEasy CSVs -> assets/js/data/market.js
+data/streeteasy/            drop StreetEasy downloads here (git-ignored)
 assets/
   css/styles.css            fonts, background, map pins, gallery
   js/

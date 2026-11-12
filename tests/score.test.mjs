@@ -59,6 +59,12 @@ test('falls back to submarket, then borough, then city for a missing size', () =
 test('matches common short names to StreetEasy neighborhood names', () => {
   const b = benchmarkFor(unit({ city: 'Brooklyn', citySlug: 'brooklyn', neighborhood: 'Bed-Stuy', neighborhoodSlug: 'bed-stuy' }), market);
   assert.equal(b.area.name, 'Bedford-Stuyvesant');
+  assert.equal(b.matchedNeighborhood, 'Bedford-Stuyvesant');
+
+  const bx = { ...market, areas: [...market.areas,
+    { slug: 'bronx', name: 'Bronx', type: 'borough', borough: 'Bronx', parent: 'nyc', rents: { 1: 2500 } }] };
+  const theBronx = benchmarkFor(unit({ city: 'The Bronx', citySlug: 'the-bronx', neighborhood: 'Nowhere', neighborhoodSlug: 'nowhere' }), bx);
+  assert.equal(theBronx.area.slug, 'bronx', '"The Bronx" is the Bronx borough');
 });
 
 test('price: at the median earns half the price points; 25% below earns all', () => {

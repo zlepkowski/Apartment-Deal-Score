@@ -441,7 +441,9 @@ const AMENITY_FULL_MARKS = 45;
 // https://www.rentcafe.com/average-rent-market-trends/us/ny/new-york-city/
 const TYPICAL_SQFT = { 0: 480, 1: 700, 2: 960, 3: 1240 };
 
-// Short ways people write neighborhood names → StreetEasy's area slug.
+// Common ways people name a neighborhood → the StreetEasy Data Dashboard area
+// it's published under. Only unambiguous mappings: anything else falls back
+// to the borough figure, and the listing page says so.
 const AREA_ALIASES = {
   'bed-stuy': 'bedford-stuyvesant',
   lic: 'long-island-city',
@@ -449,7 +451,19 @@ const AREA_ALIASES = {
   uws: 'upper-west-side',
   ues: 'upper-east-side',
   les: 'lower-east-side',
+  plg: 'prospect-lefferts-gardens',
+  harlem: 'central-harlem',
+  'spanish-harlem': 'east-harlem',
+  'el-barrio': 'east-harlem',
+  'hells-kitchen': 'midtown-west',
+  clinton: 'midtown-west',
+  'stuy-town': 'stuyvesant-town-pcv',
+  'stuyvesant-town': 'stuyvesant-town-pcv',
+  'peter-cooper-village': 'stuyvesant-town-pcv',
+  'greenwood-heights': 'greenwood',
+  'columbia-street-waterfront-district': 'columbia-st-waterfront-district',
 };
+const BOROUGH_ALIASES = { 'the-bronx': 'bronx' };
 
 const CONFIDENCE_BY_LEVEL = { neighborhood: 'high', submarket: 'medium', borough: 'low', city: 'low' };
 
@@ -496,7 +510,8 @@ function indexOf(market) {
 // its neighborhood, the neighborhood's submarket, the borough, then all of NYC.
 function areaChain(listing, market = MARKET) {
   const idx = indexOf(market);
-  const boroughSlug = slugify(listing.citySlug || listing.city);
+  const rawBorough = slugify(listing.citySlug || listing.city);
+  const boroughSlug = BOROUGH_ALIASES[rawBorough] || rawBorough;
   const nbhdSlug = slugify(listing.neighborhoodSlug || listing.neighborhood);
   const candidates = idx.neighborhoods.get(AREA_ALIASES[nbhdSlug] || nbhdSlug) || [];
   // Neighborhood names can repeat across boroughs; prefer the listing's borough.
@@ -1357,6 +1372,9 @@ function benchmarkExplainer(s) {
     el('span', { class: `inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${conf.cls}` }, conf.label),
     el('ul', { class: 'mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600' }, [
       el('li', {}, `StreetEasy median asking rent for ${bed}s in ${b.area.name}.`),
+      b.matchedNeighborhood && b.matchedNeighborhood.toLowerCase() !== String(s.neighborhood).toLowerCase()
+        ? el('li', {}, `StreetEasy publishes "${s.neighborhood}" as ${b.matchedNeighborhood}.`)
+        : null,
       fellBack
         ? el('li', {}, b.matchedNeighborhood
           ? `StreetEasy doesn't publish a ${bed} figure for ${b.matchedNeighborhood}, so this uses the ${LEVEL_NOUN[b.level]} figure.`
