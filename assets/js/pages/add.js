@@ -90,8 +90,11 @@ function amenityGroups() {
   ]);
 }
 
-export function addPage(root) {
+// ctx.query may pre-fill the form (from "Score an apartment here" on Browse):
+// neighborhood, borough, beds.
+export function addPage(root, ctx = {}) {
   let lastTrigger = null;
+  let prefill = ctx.query && (ctx.query.neighborhood || ctx.query.borough || ctx.query.beds) ? ctx.query : null;
 
   function render(message) {
     const rentInput = input('rent', { required: 'required', inputmode: 'numeric', autocomplete: 'off', placeholder: '3200' });
@@ -165,6 +168,14 @@ export function addPage(root) {
         el('p', { class: 'text-sm text-slate-600' }, 'Saved only in this browser. Nothing is uploaded.'),
       ]),
     ]);
+
+    if (prefill) {
+      const f = form.elements;
+      if (prefill.neighborhood) f.neighborhood.value = prefill.neighborhood;
+      if (prefill.borough) f.city.value = prefill.borough;
+      if (['0', '1', '2', '3', '4', '5'].includes(prefill.beds)) f.beds.value = prefill.beds;
+      prefill = null; // only for the first render
+    }
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();

@@ -1,5 +1,6 @@
-// Browse page — filter, sort, and the scored listing grid (or map). This is
-// where the Deal Score does its work: by default we sort best-deal-first.
+// Browse page — your scored apartments (filter, sort, grid or map), then
+// StreetEasy's rents by neighborhood. With no apartments added yet, the page
+// leads with the neighborhood rents so it's never empty.
 //
 // The filter bar and the results are rendered separately: changing a filter
 // only re-renders the results, so a text field keeps focus while you type and
@@ -14,6 +15,7 @@ import { MARKET } from '../data/market.js';
 import { filterBar } from '../components/filters.js';
 import { listingCard } from '../components/listingCard.js';
 import { listingsMap, hasLocation } from '../components/map.js';
+import { marketRents, marketStateFromQuery, marketStateToParams } from '../components/marketRents.js';
 
 function stateFromQuery(q) {
   return {
@@ -23,7 +25,7 @@ function stateFromQuery(q) {
   };
 }
 
-function stateToHash(s) {
+function stateToHash(s, market) {
   const p = new URLSearchParams();
   if (s.city) p.set('city', s.city);
   if (s.neighborhood) p.set('neighborhood', s.neighborhood);
@@ -32,6 +34,7 @@ function stateToHash(s) {
   if (s.laundry) p.set('laundry', '1');
   if (s.sort && s.sort !== 'deal') p.set('sort', s.sort);
   if (s.view === 'map') p.set('view', 'map');
+  if (market) marketStateToParams(market, p);
   const qs = p.toString();
   return '#/' + (qs ? '?' + qs : '');
 }
@@ -108,6 +111,9 @@ function viewToggle(view, onChange) {
 export async function homePage(root, ctx) {
   const all = scoreAll(await getListings());
   let state = stateFromQuery(ctx.query);
+  let marketState = marketStateFromQuery(ctx.query);
+  // Keep the URL shareable without triggering a route change.
+  const syncUrl = () => history.replaceState(null, '', stateToHash(state, marketState));
   let map = null; // created when the map view opens, reused while it stays open
   let firstReveal = true; // stagger the cards in once, not on every filter change
 
@@ -120,8 +126,7 @@ export async function homePage(root, ctx) {
   function update(next) {
     const cityChanged = next.city !== state.city;
     state = next;
-    // Keep the URL shareable without triggering a route change.
-    history.replaceState(null, '', stateToHash(state));
+    syncUrl();
     if (cityChanged) renderFilters(); // neighborhood options depend on the borough
     renderResults();
   }
@@ -163,16 +168,27 @@ export async function homePage(root, ctx) {
     mount(gridSlot, filtered.length
       ? el('ul', { class: 'grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3', 'aria-label': 'Listings' },
         filtered.map((s, index) => el('li', {}, [listingCard(s, { enter, index })])))
-      : all.length
-        ? el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-600' },
-          'No listings match these filters. Try widening your search.')
-        : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center' }, [
-          el('h2', { class: 'font-semibold text-slate-900' }, 'No listings yet'),
-          el('p', { class: 'mt-1 text-sm text-slate-600' },
-            'Add an apartment you\'re considering to see how its rent compares with StreetEasy\'s median for the neighborhood.'),
-          el('a', { href: '#/add', class: 'mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover' }, 'Add a listing'),
-        ]));
+      : el('div', { class: 'rounded-2xl border border-dashed border-slate-300 p-10 text-center text-slate-600' },
+        'No apartments match these filters. Try widening your search.'));
   }
+
+  const market = MARKET.areas.length
+    ? marketRents(marketState, (next) => { marketState = next; syncUrl(); })
+    : null;
+
+  // No apartments added yet: a short prompt, then the neighborhood rents.
+  const yours = all.length
+    ? el('section', { 'aria-labelledby': 'yours-heading' }, [
+      el('h2', { class: 'mb-3 text-xl font-bold text-slate-900', id: 'yours-heading' }, 'Your apartments'),
+      filtersSlot, summarySlot, toolbarSlot, mapSlot, gridSlot,
+    ])
+    : el('div', { class: 'flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between' }, [
+      el('div', {}, [
+        el('h2', { class: 'font-semibold text-slate-900' }, 'Score an apartment you\'re considering'),
+        el('p', { class: 'mt-1 text-sm text-slate-700' }, 'Add its rent, size and amenities to get a Deal Score. It\'s saved only in this browser.'),
+      ]),
+      el('a', { href: '#/add', class: 'inline-block shrink-0 self-start rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover sm:self-auto' }, 'Add a listing'),
+    ]);
 
   mount(root, el('div', { class: 'mx-auto max-w-6xl px-4 py-6' }, [
     el('div', { class: 'mb-5' }, [
@@ -183,12 +199,11 @@ export async function homePage(root, ctx) {
         ? [`Market data: `, el('a', { href: MARKET.sourceUrl, target: '_blank', rel: 'noopener', class: 'underline hover:text-slate-900' }, 'StreetEasy'), `, ${monthLabel(MARKET.asOf)}.`]
         : 'StreetEasy market data hasn\'t been imported yet, so prices aren\'t benchmarked.'),
     ]),
-    filtersSlot,
-    summarySlot,
-    toolbarSlot,
-    mapSlot,
-    gridSlot,
+    yours,
+    market,
   ]));
-  renderFilters();
-  renderResults();
+  if (all.length) {
+    renderFilters();
+    renderResults();
+  }
 }

@@ -59,10 +59,15 @@ To tune it:
 
 ## Pages
 
-- **Browse:** filter by borough, neighborhood, beds, max rent and in-unit
-  laundry, and sort by Deal Score (default), price, $/sqft or biggest savings.
-  The **Grid / Map** toggle shows listings as Deal Score pins colored by grade.
-  Filters and view are kept in the URL, so any view is shareable.
+- **Browse:** *NYC rents by neighborhood*, StreetEasy's median asking rent for
+  all 176 neighborhoods: switch size (studio to 3+ beds) and borough, search,
+  sort, see how many listings back each figure and how it compares with the
+  borough, and jump to "Score an apartment here" with the form pre-filled.
+  Figures from fewer than 10 listings are hidden unless you ask for them.
+  Once you add apartments, *Your apartments* appears above it: filter by
+  borough, neighborhood, beds, max rent and in-unit laundry, sort by Deal Score
+  (default), price, $/sqft or biggest savings, and switch between a grid and a
+  map of Deal Score pins. Filters and views are kept in the URL.
 - **Listing detail:** a photo gallery (when the listing has photos), unit facts,
   amenities, a location map with nearby listings, the per-component score
   breakdown, and which StreetEasy figure the price was compared with.

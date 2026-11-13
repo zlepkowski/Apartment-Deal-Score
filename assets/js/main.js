@@ -69,7 +69,7 @@ function page(title, fn) {
 route('#/', page('', homePage));
 route('#/listing/:id', page('Listing', listingPage));
 route('#/methodology', page('How scoring works', () => methodologyPage(appRoot)));
-route('#/add', page('Add a listing', () => addPage(appRoot)));
+route('#/add', page('Add a listing', (root, ctx) => addPage(root, ctx)));
 route('#/privacy', page('Privacy', () => privacyPage(appRoot)));
 route('#/terms', page('Terms', () => termsPage(appRoot)));
 
