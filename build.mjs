@@ -31,6 +31,7 @@ const order = [
   'assets/js/components/header.js',
   'assets/js/components/listingCard.js',
   'assets/js/components/filters.js',
+  'assets/js/components/marketRents.js',
   'assets/js/pages/home.js',
   'assets/js/pages/listing.js',
   'assets/js/pages/methodology.js',
