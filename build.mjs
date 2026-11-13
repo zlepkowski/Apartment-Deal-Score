@@ -6,6 +6,7 @@
 // Output: dist/dealscore.js
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,3 +66,18 @@ await mkdir(resolve(here, 'dist'), { recursive: true });
 await writeFile(resolve(here, 'dist/dealscore.js'), bundle);
 
 console.log(`wrote dist/dealscore.js — ${(bundle.length / 1024).toFixed(1)} KB`);
+
+// Cache-busting: GitHub Pages lets browsers cache files for 10 minutes, so
+// stamp index.html's script and stylesheet URLs with a content hash. A changed
+// file gets a new URL and is fetched fresh as soon as index.html reloads.
+const fingerprint = (text) => createHash('sha256').update(text).digest('hex').slice(0, 10);
+const css = await readFile(resolve(here, 'assets/css/styles.css'), 'utf8');
+const indexPath = resolve(here, 'index.html');
+const html = await readFile(indexPath, 'utf8');
+const stamped = html
+  .replace(/\.\/dist\/dealscore\.js(\?v=[0-9a-f]+)?/, `./dist/dealscore.js?v=${fingerprint(bundle)}`)
+  .replace(/\.\/assets\/css\/styles\.css(\?v=[0-9a-f]+)?/, `./assets/css/styles.css?v=${fingerprint(css)}`);
+if (stamped !== html) {
+  await writeFile(indexPath, stamped);
+  console.log('stamped index.html with new asset versions');
+}
