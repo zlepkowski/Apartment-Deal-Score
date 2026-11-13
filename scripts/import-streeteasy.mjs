@@ -10,8 +10,12 @@
 // medianAskingRent_Studio.csv, medianAskingRent_OneBd.csv,
 // medianAskingRent_TwoBd.csv, medianAskingRent_ThreePlusBd.csv. Each has the
 // columns areaName, Borough, areaType, then one column per month (YYYY-MM).
-// medianAskingRent_All.csv (all sizes mixed) is read for the coverage report
-// only: a mixed-size median isn't a fair benchmark for any one size.
+// medianAskingRent_All.csv (all sizes mixed) is ignored: a mixed-size median
+// isn't a fair benchmark for any one size.
+//
+// Optional: the matching rentalInventory_<size>.csv files (number of listings
+// behind each median). When present, each figure carries its listing count, and
+// the engine skips neighborhood figures based on too few listings.
 //
 // Only the latest month is kept. The raw downloads stay out of git (see
 // .gitignore); the generated module holds just the figures the site uses.
@@ -32,9 +36,9 @@ const dir = resolve(args.find((a, i) => !a.startsWith('--') && i !== outIdx + 1)
 const BED_LABEL = { 0: 'studio', 1: '1-bed', 2: '2-bed', 3: '3+ bed' };
 const BOROUGH_ORDER = ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'];
 
-// medianAskingRent_<size>.csv → 0 | 1 | 2 | 3 | 'all' | null
-function sizeOf(file) {
-  const m = /^medianAskingRent_(.+)\.csv$/i.exec(file);
+// <metric>_<size>.csv → 0 | 1 | 2 | 3 | 'all' | null
+function sizeOf(file, metric = 'medianAskingRent') {
+  const m = new RegExp(`^${metric}_(.+)\\.csv$`, 'i').exec(file);
   if (!m) return null;
   const k = m[1].toLowerCase().replace(/[^a-z0-9]/g, '');
   if (k === 'all') return 'all';
@@ -79,9 +83,13 @@ async function load(file) {
   return { rows, latest: months[months.length - 1] };
 }
 
-const files = (await readdir(dir)).filter((f) => sizeOf(f) !== null);
+const allFiles = await readdir(dir);
+const files = allFiles.filter((f) => sizeOf(f) !== null);
 const bySize = {};
 for (const f of files) bySize[sizeOf(f)] = { file: f, ...(await load(f)) };
+const invFiles = allFiles.filter((f) => [0, 1, 2, 3].includes(sizeOf(f, 'rentalInventory')));
+const invBySize = {};
+for (const f of invFiles) invBySize[sizeOf(f, 'rentalInventory')] = { file: f, ...(await load(f)) };
 
 const sizes = [0, 1, 2, 3].filter((b) => bySize[b]);
 if (!sizes.length) {
@@ -110,6 +118,7 @@ function areaFor(row) {
       borough: type === 'city' ? null : row.Borough || null,
       parent: type === 'city' ? null : type === 'borough' ? 'nyc' : slugify(row.Borough) || 'nyc',
       rents: {},
+      counts: {},
     });
   }
   return areas.get(key);
@@ -120,7 +129,18 @@ for (const b of sizes) {
     const v = Number(row[asOf]);
     if (row[asOf] !== '' && Number.isFinite(v) && v > 0) area.rents[b] = Math.round(v);
   }
+  // Listing counts for the same month, only where there's a median.
+  for (const row of invBySize[b]?.rows || []) {
+    const area = areaFor(row);
+    const n = Number(row[asOf]);
+    if (area.rents[b] && row[asOf] !== '' && Number.isFinite(n)) area.counts[b] = Math.round(n);
+  }
 }
+for (const b of sizes) {
+  if (!invBySize[b]) console.warn(`warning: no rentalInventory file for ${BED_LABEL[b]}; its figures carry no listing counts.`);
+  else if (invBySize[b].latest !== asOf) console.warn(`warning: ${invBySize[b].file} ends at ${invBySize[b].latest}, medians at ${asOf}.`);
+}
+for (const a of areas.values()) if (!Object.keys(a.counts).length) delete a.counts;
 
 const typeRank = { city: 0, borough: 1, submarket: 2, neighborhood: 3 };
 const list = [...areas.values()].sort((a, b) =>
@@ -135,7 +155,7 @@ for (const a of list) {
   seen.set(a.slug, a.name);
 }
 
-const sources = files.filter((f) => sizeOf(f) !== 'all').sort().join(', ');
+const sources = [...files.filter((f) => sizeOf(f) !== 'all'), ...invFiles].sort().join(', ');
 const body = list.map((a) => `    ${JSON.stringify(a)},`).join('\n');
 const out = `// StreetEasy market benchmarks.
 //
@@ -151,6 +171,7 @@ const out = `// StreetEasy market benchmarks.
 //     parent   slug of the next-larger area, or null
 //     rents    median asking rent by bedroom class — keys 0 (studio), 1, 2, 3 (3+).
 //              A key is missing when StreetEasy publishes no figure for it.
+//     counts   (optional) number of listings behind each median, same keys.
 
 export const MARKET = {
   source: 'StreetEasy',
@@ -170,7 +191,8 @@ console.log(`wrote ${outPath} — ${list.length} areas, figures for ${asOf}`);
 console.log(`sizes imported: ${sizes.map((b) => BED_LABEL[b]).join(', ')}${sizes.length < 4 ? ` (missing: ${[0, 1, 2, 3].filter((b) => !bySize[b]).map((b) => BED_LABEL[b]).join(', ')})` : ''}`);
 for (const b of sizes) {
   const n = nbhds.filter((a) => a.rents[b]).length;
-  console.log(`  ${BED_LABEL[b].padEnd(7)} ${n}/${nbhds.length} neighborhoods have a figure`);
+  const solid = nbhds.filter((a) => a.rents[b] && (!a.counts || (a.counts[b] ?? Infinity) >= 10)).length;
+  console.log(`  ${BED_LABEL[b].padEnd(7)} ${n}/${nbhds.length} neighborhoods have a figure; ${solid} based on 10+ listings`);
 }
 const none = nbhds.filter((a) => !Object.keys(a.rents).length).map((a) => a.name);
 if (none.length) console.log(`  no figure at any size (borough fallback): ${none.join(', ')}`);

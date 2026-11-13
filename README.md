@@ -29,9 +29,12 @@ Typical rents are StreetEasy's monthly median asking rents from its
 [`assets/js/data/market.js`](assets/js/data/market.js). StreetEasy publishes
 figures for ~176 neighborhoods, the five boroughs and NYC, but not every
 neighborhood × size, so DealScore uses the most specific figure available:
-neighborhood → borough → all of NYC. The level used is shown as a
-confidence label (high / medium / low), and low-confidence savings are flagged
-as rough estimates.
+neighborhood → borough → all of NYC. A neighborhood figure is used only when
+it's based on at least 10 listings (StreetEasy's Oct 2026 Nolita studio median,
+for example, is a single $9,500 listing). The confidence label reflects this:
+high for a neighborhood figure from 30+ listings, medium for 10–29, low for a
+borough or citywide figure, and low-confidence savings are flagged as rough
+estimates.
 
 Listings match StreetEasy areas by name, so use StreetEasy's neighborhood names
 (the add form suggests them). Common alternatives are understood, e.g.
@@ -135,11 +138,10 @@ Ways to add listings:
 
 DealScore is meant to run on StreetEasy data only, in three phases:
 
-1. **StreetEasy market benchmarks (in progress).** Monthly median asking rents
-   per unit size from the Data Dashboard's CSV downloads, converted by
-   `scripts/import-streeteasy.mjs` into `assets/js/data/market.js`. Scoring, UI
-   and importer are done; `market.js` stays empty, and prices unbenchmarked,
-   until the per-size CSVs are imported. Refreshed by hand each month (see
+1. **StreetEasy market benchmarks (live, Oct 2026 data).** Monthly median
+   asking rents and listing counts per unit size from the Data Dashboard's CSV
+   downloads, converted by `scripts/import-streeteasy.mjs` into
+   `assets/js/data/market.js`. Refreshed by hand each month (see
    [`data/streeteasy/README.md`](data/streeteasy/README.md)): StreetEasy's bot
    protection blocks automated downloads and its terms forbid scraping, so
    nothing fetches from StreetEasy automatically. The raw CSVs are git-ignored;

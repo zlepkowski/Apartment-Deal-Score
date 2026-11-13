@@ -64,6 +64,14 @@ const BOROUGH_ALIASES = { 'the-bronx': 'bronx' };
 
 const CONFIDENCE_BY_LEVEL = { neighborhood: 'high', submarket: 'medium', borough: 'low', city: 'low' };
 
+// A median from a handful of listings is noise (StreetEasy's Oct 2026 Nolita
+// studio median is one $9,500 listing). Below MIN_LISTINGS, a neighborhood's
+// figure is skipped in favor of the wider area; under HIGH_CONFIDENCE_LISTINGS
+// it's used but labelled medium confidence. Boroughs and the city always have
+// enough listings, so the threshold only applies below borough level.
+export const MIN_LISTINGS = 10;
+export const HIGH_CONFIDENCE_LISTINGS = 30;
+
 export function bedLabel(n) {
   return n === 0 ? 'studio' : n >= 3 ? '3+ bed' : `${n}-bed`;
 }
@@ -131,19 +139,29 @@ export function areaChain(listing, market = MARKET) {
 export function benchmarkFor(listing, market = MARKET) {
   const beds = bedClass(listing.beds);
   const { chain, matchedNeighborhood } = areaChain(listing, market);
+  let thin = null; // the first more-specific figure skipped for too few listings
   for (const area of chain) {
     const rent = area.rents && area.rents[beds];
-    if (rent > 0) {
-      return {
-        rent,
-        beds,
-        area: { slug: area.slug, name: area.name, type: area.type },
-        level: area.type,
-        confidence: CONFIDENCE_BY_LEVEL[area.type] || 'low',
-        matchedNeighborhood: matchedNeighborhood ? matchedNeighborhood.name : null,
-        asOf: market.asOf,
-      };
+    if (!(rent > 0)) continue;
+    const listings = area.counts ? area.counts[beds] ?? null : null;
+    const local = area.type === 'neighborhood' || area.type === 'submarket';
+    if (local && listings != null && listings < MIN_LISTINGS) {
+      if (!thin) thin = { name: area.name, rent, listings };
+      continue;
     }
+    let confidence = CONFIDENCE_BY_LEVEL[area.type] || 'low';
+    if (area.type === 'neighborhood' && listings != null && listings < HIGH_CONFIDENCE_LISTINGS) confidence = 'medium';
+    return {
+      rent,
+      beds,
+      area: { slug: area.slug, name: area.name, type: area.type },
+      level: area.type,
+      listings,
+      confidence,
+      thin,
+      matchedNeighborhood: matchedNeighborhood ? matchedNeighborhood.name : null,
+      asOf: market.asOf,
+    };
   }
   return null;
 }

@@ -2,7 +2,7 @@
 
 import { el, mount } from '../util/dom.js';
 import { MARKET } from '../data/market.js';
-import { TYPICAL_SQFT, monthLabel } from '../core/score.js';
+import { TYPICAL_SQFT, MIN_LISTINGS, HIGH_CONFIDENCE_LISTINGS, monthLabel } from '../core/score.js';
 
 const COMPONENTS = [
   ['Price vs. StreetEasy median', '60 pts', 'The listing\'s rent compared with StreetEasy\'s median asking rent for the same neighborhood and bedroom count (studio, 1, 2, or 3+ beds). Right at the median earns half marks; 25% below earns full marks; 25% above earns none. This is the single biggest factor.'],
@@ -63,11 +63,12 @@ export function methodologyPage(root) {
         methodLink(MARKET.sourceUrl, 'Data Dashboard'),
         MARKET.asOf ? ` (currently ${monthLabel(MARKET.asOf)}), refreshed monthly.` : '. They haven\'t been imported yet.',
       ]),
-      methodPara('StreetEasy doesn\'t publish a figure for every neighborhood and size, so DealScore uses the most ' +
-        'specific one available: the neighborhood first, then the wider area it belongs to, then the borough, ' +
-        'then all of NYC. Each listing shows which level it used as a confidence label: high for a ' +
-        'neighborhood figure, medium for a wider area, low for a borough or citywide figure. Low-confidence ' +
-        'savings are flagged as rough estimates.'),
+      methodPara('StreetEasy doesn\'t publish a figure for every neighborhood and size, and some figures come from ' +
+        'only one or two listings. DealScore uses a neighborhood\'s figure only when it\'s based on at least ' +
+        `${MIN_LISTINGS} listings; otherwise it uses the borough figure, then all of NYC. Each listing shows a ` +
+        `confidence label: high for a neighborhood figure from ${HIGH_CONFIDENCE_LISTINGS}+ listings, medium for ` +
+        `${MIN_LISTINGS}–${HIGH_CONFIDENCE_LISTINGS - 1} listings, low for a borough or citywide figure. ` +
+        'Low-confidence savings are flagged as rough estimates.'),
     ]),
 
     methodCard([
