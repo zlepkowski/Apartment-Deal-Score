@@ -8,13 +8,18 @@ committed.
 
 ## Monthly refresh
 
-1. In a browser, download **Median Asking Rent** for each unit size: Studio,
-   One Bedroom, Two Bedroom and Three+ Bedroom. StreetEasy blocks automated
-   downloads, so this step is manual.
+1. In a browser, at https://streeteasy.com/blog/download-data/, download two
+   rental metrics for each unit size (Studio, One Bedroom, Two Bedroom, Three+
+   Bedroom), eight files in all:
+   - **Median Asking Rent**: the benchmark.
+   - **Rental Inventory**: how many listings each median is based on. The site
+     ignores neighborhood medians from fewer than 10 listings.
+
+   StreetEasy blocks automated downloads, so this step is manual.
 2. Unzip them into this folder. Expected names look like
-   `medianAskingRent_Studio.csv`, `medianAskingRent_OneBd.csv`, … (the importer
-   matches the size from the name). `medianAskingRent_All.csv` mixes all sizes
-   and isn't used as a benchmark.
+   `medianAskingRent_Studio.csv`, `rentalInventory_OneBd.csv`, … (the importer
+   matches the metric and size from the name). The `_All` files mix all sizes
+   and aren't used.
 3. From the repo root, import, rebuild, and test:
 
    ```bash

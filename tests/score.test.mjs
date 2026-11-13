@@ -67,6 +67,28 @@ test('matches common short names to StreetEasy neighborhood names', () => {
   assert.equal(theBronx.area.slug, 'bronx', '"The Bronx" is the Bronx borough');
 });
 
+test('neighborhood figures from too few listings are skipped for the borough', () => {
+  const withCounts = { ...market, areas: market.areas.map((a) => a.slug === 'astoria'
+    ? { ...a, rents: { 0: 9500, 1: 2800, 2: 3900 }, counts: { 0: 1, 1: 413, 2: 15 } }
+    : a.slug === 'queens' ? { ...a, counts: { 0: 576, 1: 1730, 2: 1466 } } : a) };
+
+  // 1 listing: skipped, and the skipped figure is reported.
+  const studio = benchmarkFor(unit({ beds: 0 }), withCounts);
+  assert.notEqual(studio.area.slug, 'astoria');
+  assert.deepEqual(studio.thin, { name: 'Astoria', rent: 9500, listings: 1 });
+
+  // 413 listings: used, high confidence, count reported.
+  const oneBed = benchmarkFor(unit({ beds: 1 }), withCounts);
+  assert.equal(oneBed.area.slug, 'astoria');
+  assert.equal(oneBed.listings, 413);
+  assert.equal(oneBed.confidence, 'high');
+
+  // 15 listings: used, but medium confidence.
+  const twoBed = benchmarkFor(unit({ beds: 2 }), withCounts);
+  assert.equal(twoBed.area.slug, 'astoria');
+  assert.equal(twoBed.confidence, 'medium');
+});
+
 test('price: at the median earns half the price points; 25% below earns all', () => {
   const at = scoreListing(unit({ rent: 2800 }), market);
   assert.equal(at.breakdown.find((b) => b.key === 'price').points, 30);

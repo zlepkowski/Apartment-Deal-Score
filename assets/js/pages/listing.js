@@ -65,14 +65,17 @@ function benchmarkExplainer(s) {
   return el('div', { class: 'mt-3' }, [
     el('span', { class: `inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${conf.cls}` }, conf.label),
     el('ul', { class: 'mt-2 list-disc space-y-1 pl-4 text-xs text-slate-600' }, [
-      el('li', {}, `StreetEasy median asking rent for ${bed}s in ${b.area.name}.`),
+      el('li', {}, `StreetEasy median asking rent for ${bed}s in ${b.area.name}` +
+        (b.listings != null ? `, from ${b.listings.toLocaleString('en-US')} listing${b.listings === 1 ? '' : 's'}.` : '.')),
       b.matchedNeighborhood && b.matchedNeighborhood.toLowerCase() !== String(s.neighborhood).toLowerCase()
         ? el('li', {}, `StreetEasy publishes "${s.neighborhood}" as ${b.matchedNeighborhood}.`)
         : null,
       fellBack
-        ? el('li', {}, b.matchedNeighborhood
-          ? `StreetEasy doesn't publish a ${bed} figure for ${b.matchedNeighborhood}, so this uses the ${LEVEL_NOUN[b.level]} figure.`
-          : `"${s.neighborhood}" isn't a StreetEasy neighborhood name (or has no ${bed} figure), so this uses the ${LEVEL_NOUN[b.level]} figure.`)
+        ? el('li', {}, b.thin
+          ? `StreetEasy's ${b.thin.name} ${bed} figure (${money(b.thin.rent)}) comes from only ${b.thin.listings} listing${b.thin.listings === 1 ? '' : 's'}, too few to rely on, so this uses the ${LEVEL_NOUN[b.level]} figure.`
+          : b.matchedNeighborhood
+            ? `StreetEasy doesn't publish a ${bed} figure for ${b.matchedNeighborhood}, so this uses the ${LEVEL_NOUN[b.level]} figure.`
+            : `"${s.neighborhood}" isn't a StreetEasy neighborhood name, so this uses the ${LEVEL_NOUN[b.level]} figure.`)
         : null,
     ]),
     credit,
